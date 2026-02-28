@@ -3,9 +3,9 @@ from typing import List
 import uuid
 
 from app.core.database import supabase
-from app.models.schemas import PRDResponse, PRDDetailResponse, AnalysisResultSchema
+from app.models.schemas import PRDResponse, PRDDetailResponse, AnalysisResultSchema, RefinementRequest
 from app.services.extractor import extract_text
-from app.services.analyzer import analyze_prd_text
+from app.services.analyzer import analyze_prd_text, refine_prd_text
 
 router = APIRouter()
 
@@ -112,3 +112,38 @@ async def get_prd_detail(prd_id: str):
         raise
     except Exception as e:
          raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/prds/{prd_id}/refine", response_model=PRDDetailResponse)
+async def refine_prd(prd_id: str, request: RefinementRequest):
+    try:
+        # 1. Get current PRD and analysis
+        prd_res = supabase.table("prds").select("*").eq("id", prd_id).execute()
+        if not prd_res.data:
+            raise HTTPException(status_code=404, detail="PRD not found")
+            
+        analysis_res = supabase.table("analysis_results").select("*").eq("prd_id", prd_id).execute()
+        if not analysis_res.data:
+            raise HTTPException(status_code=400, detail="PRD has no analysis to refine")
+            
+        current_analysis = analysis_res.data[0]
+        
+        # 2. Call refinement logic
+        new_analysis: AnalysisResultSchema = await refine_prd_text(
+            current_analysis['standardized_prd'], 
+            request.instruction
+        )
+        
+        # 3. Update database
+        supabase.table("analysis_results").update({
+            "standardized_prd": new_analysis.standardized_prd,
+            "quality_score": new_analysis.quality_score,
+            "missing_requirements": getattr(new_analysis, 'missing_requirements', []),
+            "qa_risk_insights": getattr(new_analysis, 'qa_risk_insights', [])
+        }).eq("prd_id", prd_id).execute()
+        
+        # 4. Return updated PRD detail
+        return await get_prd_detail(prd_id)
+        
+    except Exception as e:
+        print(f"Error refining PRD: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
