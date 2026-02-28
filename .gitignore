@@ -1,0 +1,38 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules/
+backend/venv/
+backend/__pycache__/
+backend/*.pyc
+
+# Environment files (SENSITIVE)
+.env
+.env.local
+.env.*
+backend/.env
+frontend/.env
+
+# Build outputs
+frontend/dist/
+frontend/dist-ssr/
+
+# Editor directories and files
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Temporary test files
+backend/test.docx
