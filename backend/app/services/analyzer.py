@@ -36,7 +36,32 @@ Here is the raw text to analyze:
 {text}
 """
 
+
+REFINE_PRD_PROMPT = """
+You are an expert Senior Product Manager and Software Architect.
+Current PRD Content:
+{current_prd}
+
+User Instruction for Refinement:
+{instruction}
+
+Task: Update the PRD content based on the user instruction.
+Rules:
+1. Maintain the EXACT 5-section structure (Overview, Objectives, Functional Requirements, Inclusions, Exclusions).
+2. Continue to follow all previous formatting guidelines: plain text only, NO emojis, NO tables, line-by-line bullet points.
+3. Update specific sections as requested while keeping the rest of the PRD consistent.
+
+You MUST return ONLY a valid JSON object with the following schema:
+{
+  "standardized_prd": "(string) The updated PRD Markdown content.",
+  "quality_score": "(integer, 0-100) Updated quality score.",
+  "missing_requirements": ["Updated missing requirements..."],
+  "qa_risk_insights": ["Updated QA risks..."]
+}
+"""
+
 async def analyze_prd_text(text: str) -> AnalysisResultSchema:
+    # Existing implementation...
     response = await client.chat_completion(
         model="Qwen/Qwen2.5-Coder-32B-Instruct",
         messages=[
@@ -46,8 +71,24 @@ async def analyze_prd_text(text: str) -> AnalysisResultSchema:
         max_tokens=4000,
         temperature=0.2,
     )
+    return parse_huggingface_response(response.choices[0].message.content)
+
+async def refine_prd_text(current_prd: str, instruction: str) -> AnalysisResultSchema:
+    prompt = REFINE_PRD_PROMPT.replace("{current_prd}", current_prd).replace("{instruction}", instruction)
     
-    content = response.choices[0].message.content
+    response = await client.chat_completion(
+        model="Qwen/Qwen2.5-Coder-32B-Instruct",
+        messages=[
+            {"role": "system", "content": "You are a helpful PM assistant specializing in PRD refinement. Always return valid JSON."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=4000,
+        temperature=0.2,
+    )
+    
+    return parse_huggingface_response(response.choices[0].message.content)
+
+def parse_huggingface_response(content: str) -> AnalysisResultSchema:
     try:
         # Sometimes models wrap JSON in markdown blocks
         if content.startswith("```json"):
@@ -59,7 +100,6 @@ async def analyze_prd_text(text: str) -> AnalysisResultSchema:
         return AnalysisResultSchema(**data)
     except Exception as e:
         print(f"Failed to parse JSON response: {e}")
-        print(f"Raw response: {content[:200]}...")
         # Fallback to a valid schema if parsing fails
         return AnalysisResultSchema(
             standardized_prd=content,
