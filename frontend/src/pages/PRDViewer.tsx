@@ -54,29 +54,39 @@ export default function PRDViewer() {
         const contentMarkdown = data.analysis.standardized_prd;
 
         if (format === 'md') {
-            const file = new Blob([contentMarkdown], { type: 'text/markdown' });
-            saveAs(file, `${baseFilename}.md`);
+            try {
+                const file = new Blob([contentMarkdown], { type: 'text/markdown;charset=utf-8' });
+                saveAs(file, `${baseFilename}.md`);
+            } catch (err) {
+                console.error('MD generation error:', err);
+                alert('Failed to download MD file.');
+            }
         } else if (format === 'pdf') {
-            const htmlContent = await marked.parse(contentMarkdown);
-            const container = document.createElement('div');
-            container.innerHTML = htmlContent;
+            try {
+                const htmlContent = await marked.parse(contentMarkdown);
+                const container = document.createElement('div');
+                container.innerHTML = htmlContent as string;
 
-            // Add some basic styling for the PDF conversion
-            container.style.padding = '20px';
-            container.style.fontFamily = 'Helvetica, sans-serif';
-            container.style.fontSize = '12px';
-            container.style.lineHeight = '1.5';
-            container.style.color = '#000';
+                // Add some basic styling for the PDF conversion
+                container.style.padding = '20px';
+                container.style.fontFamily = 'Helvetica, sans-serif';
+                container.style.fontSize = '12px';
+                container.style.lineHeight = '1.5';
+                container.style.color = '#000';
 
-            const opt = {
-                margin: 15,
-                filename: `${baseFilename}.pdf`,
-                image: { type: 'jpeg' as const, quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
-            };
+                const opt = {
+                    margin: 15,
+                    filename: `${baseFilename}.pdf`,
+                    image: { type: 'jpeg' as const, quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' as const }
+                };
 
-            html2pdf().from(container).set(opt).save();
+                await html2pdf().from(container).set(opt).save();
+            } catch (err) {
+                console.error('PDF generation error:', err);
+                alert('Failed to generate PDF. Check console for details.');
+            }
         } else if (format === 'docx') {
             // Simple markdown-to-docx converter for the 5 mandated sections
             const lines = contentMarkdown.split('\n');
