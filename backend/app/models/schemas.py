@@ -15,3 +15,6 @@ class PRDResponse(BaseModel):
 
 class PRDDetailResponse(PRDResponse):
     analysis: Optional[AnalysisResultSchema] = None
+
+class RefinementRequest(BaseModel):
+    instruction: str
