@@ -3,7 +3,6 @@ import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import { saveAs } from 'file-saver';
-import html2pdf from 'html2pdf.js';
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 
@@ -82,7 +81,7 @@ export default function PRDViewer() {
 
         try {
             if (format === 'md') {
-                const blob = new Blob([contentMarkdown], { type: 'text/plain;charset=utf-8' });
+                const blob = new Blob([contentMarkdown], { type: 'text/markdown;charset=utf-8' });
                 saveAs(blob, `${cleanName}.md`);
             } else if (format === 'pdf') {
                 try {
@@ -156,13 +155,8 @@ export default function PRDViewer() {
                         }
                     }
                     
-                    const pdfData = doc.output('datauristring');
-                    const link = document.createElement('a');
-                    link.href = pdfData;
-                    link.download = `${cleanName}.pdf`;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
+                    const pdfBlob = doc.output('blob');
+                    saveAs(pdfBlob, `${cleanName}.pdf`);
                 } catch (pdfError) {
                     console.error('PDF generation error:', pdfError);
                     alert('Failed to generate PDF. Check console for details.');

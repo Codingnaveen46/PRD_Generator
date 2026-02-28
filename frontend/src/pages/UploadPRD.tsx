@@ -74,7 +74,7 @@ export default function UploadPRD() {
         formData.append('file', file);
 
         try {
-            const response = await axios.post('http://localhost:8000/api/v1/analyze', formData, {
+            await axios.post('http://localhost:8000/api/v1/analyze', formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
