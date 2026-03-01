@@ -10,7 +10,7 @@ export default function Layout() {
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
             {/* Navigation */}
             <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200/50 shadow-sm">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex justify-between items-center h-16">
                         {/* Logo */}
                         <Link to="/dashboard" className="flex items-center group">
@@ -78,14 +78,14 @@ export default function Layout() {
 
             {/* Main Content */}
             <main className="flex-1 px-4 sm:px-6 lg:px-8 py-8">
-                <div className="max-w-7xl mx-auto">
+                <div className="max-w-[1800px] mx-auto">
                     <Outlet />
                 </div>
             </main>
 
             {/* Footer */}
             <footer className="mt-20 border-t border-slate-200/50 bg-white/50 backdrop-blur-sm">
-                <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+                <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <div className="text-center text-sm text-slate-600">
                         <p>Built with ✨ for smarter product requirements</p>
                     </div>
@@ -94,4 +94,3 @@ export default function Layout() {
         </div>
     );
 }
-

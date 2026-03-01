@@ -296,9 +296,12 @@ export default function PRDViewer() {
     }
 
     const analysis = data?.analysis;
+    const viewerGridClass = showChat
+        ? "grid grid-cols-1 xl:grid-cols-[minmax(0,1.6fr)_minmax(320px,0.75fr)_minmax(320px,0.85fr)] gap-6 items-start"
+        : "grid grid-cols-1 xl:grid-cols-[minmax(0,1.85fr)_minmax(340px,0.9fr)] gap-6 items-start";
 
     return (
-        <div className="max-w-7xl mx-auto pb-12">
+        <div className="w-full pb-12">
             <div className="mb-6">
                 <Link to="/dashboard" className="inline-flex items-center text-sm font-medium text-slate-500 hover:text-slate-800 transition-colors">
                     <ChevronLeft className="w-4 h-4 mr-1" />
@@ -306,21 +309,21 @@ export default function PRDViewer() {
                 </Link>
             </div>
 
-            <div className="flex flex-col lg:flex-row gap-8 items-start">
+            <div className={viewerGridClass}>
                 {/* Main Document Panel */}
-                <div className={`transition-all duration-300 ${showChat ? 'lg:w-[60%]' : 'w-full lg:w-2/3'} space-y-6`}>
+                <div className="min-w-0">
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                        <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
                             <div>
                                 <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
                                     <FileText className="w-5 h-5 text-blue-600" />
                                     Standardized PRD
                                 </h2>
-                                <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold">
+                                <p className="text-xs text-slate-500 mt-1 uppercase tracking-wider font-semibold break-all">
                                     Source: {data.filename}
                                 </p>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex flex-wrap gap-2">
                                 <button
                                     onClick={() => handleDownload('md')}
                                     className="inline-flex items-center px-3 py-1.5 border border-slate-300 shadow-sm text-xs font-medium rounded text-slate-700 bg-white hover:bg-slate-50 hover:text-blue-600 transition-colors"
@@ -345,7 +348,6 @@ export default function PRDViewer() {
                                     <Download className="w-3.5 h-3.5 mr-1.5" />
                                     DOCX
                                 </button>
-                                <div className="w-px h-6 bg-slate-200 mx-1" />
                                 <button
                                     onClick={() => setShowChat(!showChat)}
                                     className={`inline-flex items-center px-4 py-1.5 shadow-sm text-xs font-bold rounded-lg transition-all duration-200 ${showChat
@@ -354,11 +356,11 @@ export default function PRDViewer() {
                                         }`}
                                 >
                                     <MessageSquare className={`w-3.5 h-3.5 mr-1.5 ${showChat ? 'animate-pulse' : ''}`} />
-                                    Refine with AI
+                                    {showChat ? "Hide AI Panel" : "Refine with AI"}
                                 </button>
                             </div>
                         </div>
-                        <div ref={prdContentRef} className="p-10 prose prose-slate max-w-none 
+                        <div ref={prdContentRef} className="p-8 xl:p-10 2xl:px-12 prose prose-slate max-w-none 
                             prose-headings:text-slate-900 
                             prose-h1:text-3xl prose-h1:font-black prose-h1:border-b-2 prose-h1:border-blue-100 prose-h1:pb-4 prose-h1:mb-10 prose-h1:mt-16
                             prose-h2:text-2xl prose-h2:font-extrabold prose-h2:border-b prose-h2:border-slate-100 prose-h2:pb-3 prose-h2:mt-12 prose-h2:mb-6
@@ -374,7 +376,7 @@ export default function PRDViewer() {
 
                 {/* Refinement Sidebar */}
                 {showChat && (
-                    <div className="w-full lg:w-96 flex flex-col h-[700px] lg:h-[calc(100vh-140px)] sticky top-24 bg-white rounded-xl shadow-lg border border-blue-100 overflow-hidden animate-in slide-in-from-right duration-300">
+                    <div className="min-w-0 flex flex-col h-[680px] xl:h-[calc(100vh-140px)] xl:sticky xl:top-24 bg-white rounded-xl shadow-lg border border-blue-100 overflow-hidden animate-in slide-in-from-right duration-300">
                         <div className="px-6 py-4 border-b border-slate-100 bg-blue-50/50 flex justify-between items-center">
                             <div className="flex items-center gap-2">
                                 <MessageSquare className="w-5 h-5 text-blue-600" />
@@ -385,7 +387,7 @@ export default function PRDViewer() {
                             </button>
                         </div>
 
-                        <div className="flex-grow p-6 overflow-y-auto space-y-4 bg-slate-50/30">
+                        <div className="flex-grow p-5 overflow-y-auto space-y-4 bg-slate-50/30 custom-scrollbar">
                             {chatHistory.length === 0 && (
                                 <div className="text-center py-8">
                                     <div className="bg-blue-100 text-blue-600 rounded-full w-12 h-12 flex items-center justify-center mx-auto mb-4">
@@ -398,7 +400,7 @@ export default function PRDViewer() {
 
                             {chatHistory.map((msg, i) => (
                                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[85%] px-4 py-2.5 rounded-2xl text-sm ${msg.role === 'user'
+                                    <div className={`max-w-[90%] px-4 py-2.5 rounded-2xl text-sm ${msg.role === 'user'
                                         ? 'bg-blue-600 text-white rounded-br-none'
                                         : 'bg-white border border-slate-200 text-slate-700 shadow-sm rounded-bl-none'
                                         }`}>
@@ -444,8 +446,7 @@ export default function PRDViewer() {
                 )}
 
                 {/* Intelligence Sidebar */}
-                <div className={`${showChat ? 'hidden xl:flex' : 'flex'} w-full lg:w-1/3 flex-col gap-6 sticky top-24 transition-opacity duration-300`}>
-                    {/* Quality Score Card */}
+                <div className={`${showChat ? 'hidden xl:flex' : 'flex'} min-w-0 flex-col gap-6 xl:sticky xl:top-24 transition-opacity duration-300`}>
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
                         <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-4">Intelligence Score</h3>
                         <div className="flex items-end gap-4">
@@ -467,7 +468,6 @@ export default function PRDViewer() {
                         </div>
                     </div>
 
-                    {/* Missing Requirements */}
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
                             <AlertTriangle className="w-5 h-5 text-amber-500" />
@@ -492,7 +492,6 @@ export default function PRDViewer() {
                         </div>
                     </div>
 
-                    {/* QA Risk Insights */}
                     <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
                         <div className="px-6 py-4 border-b border-slate-100 flex items-center gap-2">
                             <ShieldAlert className="w-5 h-5 text-rose-500" />
@@ -515,7 +514,6 @@ export default function PRDViewer() {
                             )}
                         </div>
                     </div>
-
                 </div>
             </div>
         </div>
