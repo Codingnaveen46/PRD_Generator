@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useCallback, useEffect, useState, type KeyboardEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { formatDate } from '../utils/formatters';
-import { FileText, Loader2, ArrowRight } from 'lucide-react';
+import { FileText, Loader2, ArrowRight, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 
 interface PRD {
     id: string;
@@ -11,24 +11,101 @@ interface PRD {
     created_at: string;
 }
 
+interface DeleteCandidate {
+    id: string;
+    filename: string;
+}
+
 export default function Dashboard() {
     const [prds, setPrds] = useState<PRD[]>([]);
     const [loading, setLoading] = useState(true);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [deleteCandidate, setDeleteCandidate] = useState<DeleteCandidate | null>(null);
+    const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+    const navigate = useNavigate();
+
+    const fetchPrds = useCallback(async (showLoader = false) => {
+        if (showLoader) setLoading(true);
+
+        try {
+            const response = await axios.get('http://localhost:8000/api/v1/prds');
+            setPrds(response.data);
+        } catch (error) {
+            console.error('Error fetching PRDs:', error);
+        } finally {
+            if (showLoader) setLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
-        const fetchPrds = async () => {
-            try {
-                const response = await axios.get('http://localhost:8000/api/v1/prds');
-                setPrds(response.data);
-            } catch (error) {
-                console.error('Error fetching PRDs:', error);
-            } finally {
-                setLoading(false);
-            }
+        void fetchPrds(true);
+    }, [fetchPrds]);
+
+    const hasActiveProcessing = prds.some(
+        (prd) => prd.status === 'pending' || prd.status === 'processing'
+    );
+
+    useEffect(() => {
+        if (!hasActiveProcessing) return;
+
+        const interval = setInterval(() => {
+            void fetchPrds(false);
+        }, 3000);
+
+        return () => clearInterval(interval);
+    }, [fetchPrds, hasActiveProcessing]);
+
+    useEffect(() => {
+        const handleVisibilityOrFocus = () => {
+            if (document.visibilityState === 'hidden') return;
+            void fetchPrds(false);
         };
 
-        fetchPrds();
-    }, []);
+        window.addEventListener('focus', handleVisibilityOrFocus);
+        document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+        return () => {
+            window.removeEventListener('focus', handleVisibilityOrFocus);
+            document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+        };
+    }, [fetchPrds]);
+
+    const openDeleteModal = (prdId: string, filename: string) => {
+        setFeedback(null);
+        setDeleteCandidate({ id: prdId, filename });
+    };
+
+    const closeDeleteModal = () => {
+        if (deletingId) return;
+        setDeleteCandidate(null);
+    };
+
+    const confirmDelete = async () => {
+        if (!deleteCandidate) return;
+
+        setDeletingId(deleteCandidate.id);
+        try {
+            await axios.delete(`http://localhost:8000/api/v1/prds/${deleteCandidate.id}`);
+            setPrds((prev) => prev.filter((item) => item.id !== deleteCandidate.id));
+            setFeedback({ type: 'success', text: `"${deleteCandidate.filename}" was deleted successfully.` });
+            setDeleteCandidate(null);
+        } catch (error) {
+            console.error('Error deleting PRD:', error);
+            setFeedback({
+                type: 'error',
+                text: `Could not delete "${deleteCandidate.filename}". Please try again.`
+            });
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    const handleCardKeyDown = (event: KeyboardEvent<HTMLDivElement>, prdId: string) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            navigate(`/prd/${prdId}`);
+        }
+    };
 
     if (loading) {
         return (
@@ -62,6 +139,28 @@ export default function Dashboard() {
 
             {/* Main Content */}
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+                {feedback && (
+                    <div className={`mb-6 rounded-xl border px-4 py-3 flex items-center justify-between gap-3 ${feedback.type === 'success'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                        : 'bg-red-50 border-red-200 text-red-800'}`}>
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                            {feedback.type === 'success' ? (
+                                <CheckCircle2 className="h-4 w-4" />
+                            ) : (
+                                <AlertTriangle className="h-4 w-4" />
+                            )}
+                            {feedback.text}
+                        </div>
+                        <button
+                            type="button"
+                            className="text-xs font-semibold underline underline-offset-2 opacity-80 hover:opacity-100"
+                            onClick={() => setFeedback(null)}
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                )}
+
                 {prds.length === 0 ? (
                     <div className="text-center py-24 bg-white rounded-2xl shadow-lg border border-slate-200">
                         <div className="flex justify-center mb-6">
@@ -84,12 +183,14 @@ export default function Dashboard() {
                             {prds.length} document{prds.length !== 1 ? 's' : ''} uploaded
                         </div>
                         {prds.map((prd) => (
-                            <Link 
-                                key={prd.id} 
-                                to={`/prd/${prd.id}`}
-                                className="group"
-                            >
-                                <div className="bg-white rounded-2xl shadow-md border border-slate-200 hover:shadow-xl hover:border-blue-300 transition-all duration-300 overflow-hidden hover:-translate-y-1">
+                            <div key={prd.id} className="group">
+                                <div
+                                    className={`bg-white rounded-2xl shadow-md border border-slate-200 hover:shadow-xl hover:border-blue-300 transition-all duration-300 overflow-hidden hover:-translate-y-1 ${deletingId === prd.id ? 'opacity-70 pointer-events-none' : 'cursor-pointer'}`}
+                                    onClick={() => navigate(`/prd/${prd.id}`)}
+                                    onKeyDown={(event) => handleCardKeyDown(event, prd.id)}
+                                    role="button"
+                                    tabIndex={0}
+                                >
                                     <div className="px-6 py-5 sm:px-8 sm:py-6 flex items-center justify-between gap-4">
                                         {/* Left side */}
                                         <div className="flex items-center gap-4 flex-1 min-w-0">
@@ -122,6 +223,23 @@ export default function Dashboard() {
                                                     {prd.status}
                                                 </span>
                                             </div>
+                                            <button
+                                                type="button"
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    openDeleteModal(prd.id, prd.filename);
+                                                }}
+                                                disabled={deletingId === prd.id}
+                                                className="inline-flex items-center justify-center h-9 w-9 rounded-lg border border-red-200 text-red-500 hover:bg-red-50 hover:text-red-600 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                                                title="Delete document"
+                                                aria-label={`Delete ${prd.filename}`}
+                                            >
+                                                {deletingId === prd.id ? (
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <Trash2 className="h-4 w-4" />
+                                                )}
+                                            </button>
                                             <div className="text-slate-300 group-hover:text-blue-600 group-hover:translate-x-1 transition-all duration-300">
                                                 <ArrowRight className="h-5 w-5" />
                                             </div>
@@ -135,11 +253,60 @@ export default function Dashboard() {
                                         </div>
                                     )}
                                 </div>
-                            </Link>
+                            </div>
                         ))}
                     </div>
                 )}
             </div>
+
+            {deleteCandidate && (
+                <div
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/55 backdrop-blur-sm px-4"
+                    onClick={closeDeleteModal}
+                >
+                    <div
+                        className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200"
+                        onClick={(event) => event.stopPropagation()}
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Delete document confirmation"
+                    >
+                        <div className="p-6">
+                            <div className="flex items-start gap-3">
+                                <div className="h-10 w-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0">
+                                    <AlertTriangle className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <h3 className="text-lg font-bold text-slate-900">Delete this document?</h3>
+                                    <p className="mt-2 text-sm text-slate-600">
+                                        You are deleting <span className="font-semibold text-slate-800">{deleteCandidate.filename}</span>.
+                                        This action permanently removes the PRD and its analysis and cannot be undone.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50 rounded-b-2xl">
+                            <button
+                                type="button"
+                                onClick={closeDeleteModal}
+                                disabled={Boolean(deletingId)}
+                                className="px-4 py-2 text-sm font-semibold rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                Keep Document
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => void confirmDelete()}
+                                disabled={Boolean(deletingId)}
+                                className="inline-flex items-center gap-2 px-4 py-2 text-sm font-semibold rounded-lg bg-red-600 text-white hover:bg-red-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {Boolean(deletingId) && <Loader2 className="h-4 w-4 animate-spin" />}
+                                Delete Permanently
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
