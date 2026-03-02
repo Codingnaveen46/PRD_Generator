@@ -54,12 +54,12 @@ export default function PRDViewer() {
 
     const handleDownload = async (format: 'md' | 'pdf' | 'docx') => {
         console.log('Download requested, data:', data);
-        
+
         if (!data || !data.analysis) {
             alert('Please wait for the analysis to complete before downloading.');
             return;
         }
-        
+
         console.log('standardized_prd:', data.analysis.standardized_prd?.substring(0, 100));
 
         // Professional Naming: PRD_[Sanitized_Filename]
@@ -90,7 +90,7 @@ export default function PRDViewer() {
                         unit: 'mm',
                         format: 'a4'
                     });
-                    
+
                     doc.setProperties({
                         title: cleanName,
                         subject: 'Standardized PRD Document',
@@ -102,13 +102,13 @@ export default function PRDViewer() {
                     const margin = 10;
                     const lineHeight = 7;
                     let y = margin;
-                    
+
                     const lines = contentMarkdown.split('\n');
-                    
+
                     for (let i = 0; i < lines.length; i++) {
                         const line = lines[i];
                         const trimmed = line.trim();
-                        
+
                         if (trimmed.startsWith('## ')) {
                             doc.setFontSize(18);
                             doc.setFont('helvetica', 'bold');
@@ -139,7 +139,7 @@ export default function PRDViewer() {
                             doc.setFontSize(11);
                             doc.setFont('helvetica', 'normal');
                         }
-                        
+
                         if (trimmed) {
                             const textLines = doc.splitTextToSize(trimmed, pageWidth - margin * 2);
                             for (const textLine of textLines) {
@@ -154,7 +154,7 @@ export default function PRDViewer() {
                             y += 3;
                         }
                     }
-                    
+
                     const pdfBlob = doc.output('blob');
                     saveAs(pdfBlob, `${cleanName}.pdf`);
                 } catch (pdfError) {
@@ -225,20 +225,30 @@ export default function PRDViewer() {
     const handleRefine = async () => {
         if (!chatInput.trim() || isRefining) return;
 
-        const instruction = chatInput;
+        const userMessage = chatInput;
         setIsRefining(true);
         setChatInput('');
-        setChatHistory(prev => [...prev, { role: 'user', content: instruction }]);
+        setChatHistory(prev => [...prev, { role: 'user', content: userMessage }]);
 
         try {
-            const response = await axios.post(`http://localhost:8000/api/v1/prds/${id}/refine`, {
-                instruction
+            const response = await axios.post(`http://localhost:8000/api/v1/prds/${id}/chat`, {
+                message: userMessage
             });
-            setData(response.data);
-            setChatHistory(prev => [...prev, { role: 'ai', content: "I've updated the PRD based on your instructions!" }]);
+
+            const { action, message: aiMessage, analysis } = response.data;
+
+            // Show the AI's dynamic response
+            setChatHistory(prev => [...prev, { role: 'ai', content: aiMessage }]);
+
+            // If the AI updated the PRD, refresh the data
+            if (action === 'update' && analysis) {
+                // Refetch the full PRD detail to get updated data
+                const detailResponse = await axios.get(`http://localhost:8000/api/v1/prds/${id}`);
+                setData(detailResponse.data);
+            }
         } catch (err: any) {
-            console.error('Error refining PRD:', err);
-            setChatHistory(prev => [...prev, { role: 'ai', content: "Sorry, I encountered an error while trying to refine the document." }]);
+            console.error('Error in AI chat:', err);
+            setChatHistory(prev => [...prev, { role: 'ai', content: "Sorry, I encountered an error. Please try again." }]);
         } finally {
             setIsRefining(false);
         }

@@ -18,3 +18,11 @@ class PRDDetailResponse(PRDResponse):
 
 class RefinementRequest(BaseModel):
     instruction: str
+
+class ChatRequest(BaseModel):
+    message: str
+
+class ChatResponse(BaseModel):
+    action: str  # "chat" or "update"
+    message: str
+    analysis: Optional[AnalysisResultSchema] = None

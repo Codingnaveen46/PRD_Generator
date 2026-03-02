@@ -32,7 +32,7 @@ PRD Writing Guidelines to STRICTLY FOLLOW:
 6. Describe one flow at a time: Explain each form section or system flow separately to keep logic clean and understandable.
 7. What to Avoid: NO emojis, NO tables, NO mixing multiple flows into one block, NO generic statements without details.
 
-You MUST return ONLY a valid JSON object with the following schema and NO markdown formatting (no ```json):
+You MUST return ONLY a valid JSON objecwt with the following schema and NO markdown formatting (no ```json):
 {
   "standardized_prd": "(string) A comprehensive, beautifully formatted Markdown representation of the PRD following the EXACT structure and guidelines above. \n- Use double line breaks between ALL sections and paragraphs.\n- Use '##' for the 5 main mandated section headings.\n- Use '###' for any sub-headings or specific flows within those sections.\n- EVERY single detail or requirement MUST be a new bullet point starting with a '*' on a NEW LINE.\n- NEVER group bullet points into a single paragraph. NEVER use inline bullets (like '•').\n- DO NOT include tables. DO NOT include emojis.",
   "quality_score": "(integer, 0-100) A score representing how complete, clear, and actionable the original document is.",
@@ -138,6 +138,106 @@ async def refine_prd_text(current_prd: str, instruction: str) -> AnalysisResultS
     )
     
     return parse_huggingface_response(response.choices[0].message.content)
+
+
+CHAT_WITH_PRD_PROMPT = """
+You are a smart AI assistant embedded in a PRD (Product Requirements Document) management tool.
+
+Current PRD Content:
+{current_prd}
+
+User Message:
+{message}
+
+Your task: Determine the user's intent and respond accordingly.
+
+RULES:
+1. If the user is making casual conversation, asking a question, greeting, or anything that does NOT request a change to the PRD, respond conversationally. Set action to "chat".
+2. If the user is explicitly asking to UPDATE, ADD, REMOVE, MODIFY, or CHANGE something in the PRD, perform the update. Set action to "update".
+3. If the user asks a question ABOUT the PRD content (e.g., "what does this PRD cover?", "summarize the objectives"), answer based on the PRD content. Set action to "chat".
+
+You MUST return ONLY a valid JSON object (no markdown formatting, no ```json):
+{{
+  "action": "(string) Either 'chat' or 'update'",
+  "message": "(string) Your natural language response to the user. If action is 'update', describe what you changed. If action is 'chat', provide your conversational response.",
+  "updated_prd": {{
+    "standardized_prd": "(string) Only include if action is 'update'. The full updated PRD markdown.",
+    "quality_score": "(integer) Only include if action is 'update'. Updated quality score 0-100.",
+    "missing_requirements": ["Only include if action is 'update'"],
+    "qa_risk_insights": ["Only include if action is 'update'"]
+  }}
+}}
+
+If action is "chat", set "updated_prd" to null.
+"""
+
+
+async def chat_with_prd(current_prd: str, message: str) -> dict:
+    """
+    Classifies intent and either chats or updates the PRD.
+    Returns dict with keys: action, message, analysis (optional).
+    """
+    prompt = CHAT_WITH_PRD_PROMPT.replace("{current_prd}", current_prd).replace("{message}", message)
+
+    response = await client.chat_completion(
+        model="Qwen/Qwen2.5-Coder-32B-Instruct",
+        messages=[
+            {"role": "system", "content": "You are a helpful AI assistant for a PRD tool. You can chat naturally AND update PRDs. Always return valid JSON."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=4000,
+        temperature=0.3,
+    )
+
+    raw_content = response.choices[0].message.content
+    try:
+        # Clean markdown wrappers
+        content = raw_content.strip()
+        if content.startswith("```json"):
+            content = content[7:]
+        if content.startswith("```"):
+            content = content[3:]
+        if content.endswith("```"):
+            content = content[:-3]
+
+        data = json.loads(content.strip())
+        action = data.get("action", "chat")
+        ai_message = data.get("message", "I'm here to help with your PRD!")
+
+        result = {
+            "action": action,
+            "message": ai_message,
+            "analysis": None
+        }
+
+        if action == "update" and data.get("updated_prd"):
+            updated = data["updated_prd"]
+            analysis = AnalysisResultSchema(
+                standardized_prd=str(updated.get("standardized_prd", "")).strip(),
+                quality_score=int(updated.get("quality_score", 0)),
+                missing_requirements=_coerce_list(updated.get("missing_requirements")),
+                qa_risk_insights=_coerce_list(updated.get("qa_risk_insights")),
+            )
+            # Recalculate quality score
+            analysis.quality_score = calculate_dynamic_quality_score(
+                standardized_prd=analysis.standardized_prd,
+                missing_requirements=analysis.missing_requirements,
+                qa_risk_insights=analysis.qa_risk_insights,
+                model_score=analysis.quality_score,
+            )
+            result["analysis"] = analysis
+
+        return result
+
+    except Exception as e:
+        print(f"Failed to parse chat response: {e}")
+        print(f"Raw content: {raw_content}")
+        # Fallback: treat as a chat response with the raw content
+        return {
+            "action": "chat",
+            "message": raw_content.strip() if raw_content.strip() else "Sorry, I had trouble processing that. Could you try again?",
+            "analysis": None
+        }
 
 
 def _clamp_score(score: int) -> int:
