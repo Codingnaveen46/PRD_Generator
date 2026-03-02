@@ -1,7 +1,7 @@
 import json
 from huggingface_hub import AsyncInferenceClient
 from app.core.config import settings
-from app.models.schemas import AnalysisResultSchema
+from app.models.schemas import AnalysisResultSchema, TestCaseSchema
 
 
 client = AsyncInferenceClient(token=settings.huggingface_api_key)
@@ -32,7 +32,7 @@ PRD Writing Guidelines to STRICTLY FOLLOW:
 6. Describe one flow at a time: Explain each form section or system flow separately to keep logic clean and understandable.
 7. What to Avoid: NO emojis, NO tables, NO mixing multiple flows into one block, NO generic statements without details.
 
-You MUST return ONLY a valid JSON objecwt with the following schema and NO markdown formatting (no ```json):
+You MUST return ONLY a valid JSON object with the following schema and NO markdown formatting (no ```json):
 {
   "standardized_prd": "(string) A comprehensive, beautifully formatted Markdown representation of the PRD following the EXACT structure and guidelines above. \n- Use double line breaks between ALL sections and paragraphs.\n- Use '##' for the 5 main mandated section headings.\n- Use '###' for any sub-headings or specific flows within those sections.\n- EVERY single detail or requirement MUST be a new bullet point starting with a '*' on a NEW LINE.\n- NEVER group bullet points into a single paragraph. NEVER use inline bullets (like '•').\n- DO NOT include tables. DO NOT include emojis.",
   "quality_score": "(integer, 0-100) A score representing how complete, clear, and actionable the original document is.",
@@ -171,6 +171,52 @@ You MUST return ONLY a valid JSON object (no markdown formatting, no ```json):
 If action is "chat", set "updated_prd" to null.
 """
 
+TEST_CASE_GENERATION_PROMPT = """
+You are an expert QA Engineer and SDET.
+Your task is to generate a comprehensive set of test cases for the following Product Requirements Document (PRD).
+
+The test cases MUST cover:
+1. Positive scenarios (Happy paths)
+2. Negative scenarios (Error handling)
+3. Edge cases (Boundary values, unexpected inputs)
+4. Security considerations
+5. Performance considerations (if applicable)
+
+For each test case, you MUST provide the following details:
+- Scenario: A brief description of the test scenario.
+- Testing Type: Functional, UI, Security, Performance, etc.
+- Severity: Critical, High, Medium, Low.
+- Priority: P0, P1, P2, P3.
+- Feature Name: The main feature being tested.
+- Sub Feature Name: The specific sub-feature or module.
+- Test Conditions: Any prerequisites or conditions for the test.
+- Test Idea: The core idea or objective of the test.
+- Test Data: Any specific data needed for the test.
+- Acceptance Criteria: The expected result for the test to pass.
+- Test Steps: Step-by-step instructions to execute the test.
+
+You MUST return ONLY a valid JSON array of objects with the following schema:
+[
+  {
+    "scenario": "...",
+    "testing_type": "...",
+    "severity": "...",
+    "priority": "...",
+    "feature_name": "...",
+    "sub_feature_name": "...",
+    "test_conditions": "...",
+    "test_idea": "...",
+    "test_data": "...",
+    "acceptance_criteria": "...",
+    "test_steps": "..."
+  },
+  ...
+]
+
+PRD Content:
+{prd_text}
+"""
+
 
 async def chat_with_prd(current_prd: str, message: str) -> dict:
     """
@@ -238,6 +284,46 @@ async def chat_with_prd(current_prd: str, message: str) -> dict:
             "message": raw_content.strip() if raw_content.strip() else "Sorry, I had trouble processing that. Could you try again?",
             "analysis": None
         }
+
+
+async def generate_test_cases(prd_text: str) -> list[TestCaseSchema]:
+    """
+    Generates test cases from PRD text using the same client/model as analysis.
+    """
+    prompt = TEST_CASE_GENERATION_PROMPT.replace("{prd_text}", prd_text)
+    
+    response = await client.chat_completion(
+        model="Qwen/Qwen2.5-Coder-32B-Instruct",
+        messages=[
+            {"role": "system", "content": "You are a professional QA Engineer. Always return valid JSON."},
+            {"role": "user", "content": prompt}
+        ],
+        max_tokens=8000,
+        temperature=0.3,
+    )
+    
+    raw_content = response.choices[0].message.content.strip()
+    
+    # Clean markdown wrappers
+    content = raw_content
+    if content.startswith("```json"):
+        content = content[7:]
+    if content.startswith("```"):
+        content = content[3:]
+    if content.endswith("```"):
+        content = content[:-3]
+        
+    try:
+        data = json.loads(content.strip())
+        if not isinstance(data, list):
+            print(f"Expected list but got {type(data)}")
+            return []
+            
+        return [TestCaseSchema(**item) for item in data]
+    except Exception as e:
+        print(f"Failed to parse test cases: {e}")
+        print(f"Raw content: {raw_content}")
+        return []
 
 
 def _clamp_score(score: int) -> int:

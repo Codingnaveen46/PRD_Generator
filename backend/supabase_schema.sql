@@ -54,3 +54,35 @@ CREATE POLICY "Users can upload their own documents" ON storage.objects
 
 CREATE POLICY "Users can read their own documents" ON storage.objects
   FOR SELECT USING (bucket_id = 'prd_documents' AND auth.uid()::text = (storage.foldername(name))[1]);
+
+
+-- 3. Create 'test_cases' table
+CREATE TABLE public.test_cases (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  prd_id uuid REFERENCES public.prds(id) ON DELETE CASCADE NOT NULL,
+  scenario text,
+  testing_type text,
+  severity text,
+  priority text,
+  feature_name text,
+  sub_feature_name text,
+  test_conditions text,
+  test_idea text,
+  test_data text,
+  acceptance_criteria text,
+  test_steps text,
+  created_at timestamptz DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.test_cases ENABLE ROW LEVEL SECURITY;
+
+-- Allow users to see their own test cases through the PRDs table
+CREATE POLICY "Users can view their own test cases" ON public.test_cases
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.prds
+      WHERE prds.id = test_cases.prd_id
+      AND prds.user_id = auth.uid()
+    )
+  );
