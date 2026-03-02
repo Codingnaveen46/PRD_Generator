@@ -17,35 +17,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        supabase.auth.getSession().then(async ({ data: { session } }) => {
-            if (!session) {
-                // Temporary local auto-login for testing
-                console.log('No session found. Attempting temporary local auto-login...');
-                const { data, error } = await supabase.auth.signInWithPassword({
-                    email: 'test@example.com',
-                    password: 'password123',
-                });
-                if (error) {
-                    console.error('Auto-login failed. Please ensure the test user exists:', error);
-                } else if (data.session) {
-                    console.log('Auto-login successful!');
-                    setSession(data.session);
-                    setUser(data.session.user);
-                }
-            } else {
-                setSession(session);
-                setUser(session.user ?? null);
+        let isMounted = true;
+
+        const bootstrapSession = async () => {
+            const { data, error } = await supabase.auth.getSession();
+            if (!isMounted) return;
+
+            if (error) {
+                console.error('Failed to read auth session:', error);
             }
+
+            const activeSession = data.session ?? null;
+            setSession(activeSession);
+            setUser(activeSession?.user ?? null);
             setLoading(false);
-        });
+        };
+
+        void bootstrapSession();
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+            if (!isMounted) return;
             setSession(session);
             setUser(session?.user ?? null);
             setLoading(false);
         });
 
-        return () => subscription.unsubscribe();
+        return () => {
+            isMounted = false;
+            subscription.unsubscribe();
+        };
     }, []);
 
     const signOut = async () => {
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     return (
         <AuthContext.Provider value={{ session, user, loading, signOut }}>
-            {!loading && children}
+            {children}
         </AuthContext.Provider>
     );
 }

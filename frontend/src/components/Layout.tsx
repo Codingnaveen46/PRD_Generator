@@ -1,10 +1,19 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileUp, Zap } from 'lucide-react';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, FileUp, Zap, LogOut, UserCircle2 } from 'lucide-react';
+import { useAuth } from '../hooks/useAuth';
 
 export default function Layout() {
     const location = useLocation();
+    const navigate = useNavigate();
+    const { user, signOut } = useAuth();
     
     const isActive = (path: string) => location.pathname === path;
+    const userEmail = user?.email ?? "Authenticated user";
+
+    const handleSignOut = async () => {
+        await signOut();
+        navigate('/login', { replace: true });
+    };
 
     return (
         <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-50">
@@ -53,6 +62,22 @@ export default function Layout() {
                             </Link>
                         </div>
 
+                        {/* User and Sign Out (Desktop) */}
+                        <div className="hidden lg:flex items-center gap-3">
+                            <div className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600">
+                                <UserCircle2 className="w-4 h-4 text-slate-400" />
+                                <span className="text-xs font-semibold max-w-[220px] truncate">{userEmail}</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => void handleSignOut()}
+                                className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold border border-slate-200 text-slate-700 bg-white hover:bg-slate-100 transition-colors"
+                            >
+                                <LogOut className="w-4 h-4" />
+                                Logout
+                            </button>
+                        </div>
+
                         {/* Mobile menu button */}
                         <div className="flex sm:hidden gap-2">
                             <Link
@@ -71,6 +96,14 @@ export default function Layout() {
                             >
                                 <FileUp className="w-5 h-5 text-slate-700" />
                             </Link>
+                            <button
+                                type="button"
+                                onClick={() => void handleSignOut()}
+                                className="p-2 rounded-lg transition-all hover:bg-slate-100"
+                                title="Logout"
+                            >
+                                <LogOut className="w-5 h-5 text-slate-700" />
+                            </button>
                         </div>
                     </div>
                 </div>
