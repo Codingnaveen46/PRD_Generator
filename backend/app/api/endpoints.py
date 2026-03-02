@@ -262,13 +262,37 @@ async def chat_prd(prd_id: str, request: ChatRequest):
             current_score = int(current_analysis.get("quality_score") or 0)
             current_missing_count = len(current_analysis.get("missing_requirements") or [])
             new_missing_count = len(new_analysis.missing_requirements or [])
+            new_risks = new_analysis.qa_risk_insights or []
+            previous_prd_text = current_analysis.get("standardized_prd") or ""
+            previous_bullet_count = _count_markdown_bullets(previous_prd_text)
+            new_bullet_count = _count_markdown_bullets(new_analysis.standardized_prd or "")
+            added_bullets = max(0, new_bullet_count - previous_bullet_count)
 
-            adjusted_score = new_analysis.quality_score
+            # Recalculate score from scratch based on new content
+            adjusted_score = calculate_dynamic_quality_score(
+                standardized_prd=new_analysis.standardized_prd,
+                missing_requirements=new_analysis.missing_requirements or [],
+                qa_risk_insights=new_risks,
+                model_score=new_analysis.quality_score,
+            )
+
+            # Never penalize score if missing requirements didn't get worse
             if new_missing_count <= current_missing_count:
                 adjusted_score = max(adjusted_score, current_score)
+
+            # Boost score when missing requirements are resolved
             if new_missing_count < current_missing_count:
                 improvement = (current_missing_count - new_missing_count) * 6
                 adjusted_score = max(adjusted_score, min(100, current_score + improvement))
+
+            # Big boost if ALL missing requirements are now resolved
+            if current_missing_count > 0 and new_missing_count == 0:
+                adjusted_score = max(adjusted_score, 90)
+
+            # Boost if user added substantial requirement detail (new bullets)
+            if current_missing_count > 0 and added_bullets >= 2:
+                adjusted_score = max(adjusted_score, min(100, current_score + min(10, added_bullets)))
+
             adjusted_score = max(adjusted_score, TARGET_FINAL_SCORE)
             new_analysis.quality_score = adjusted_score
 
