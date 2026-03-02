@@ -6,7 +6,8 @@ import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 
-import { Loader2, Download, AlertTriangle, CheckCircle2, FileText, ChevronLeft, ShieldAlert, MessageSquare, Send, RefreshCw, X } from 'lucide-react';
+import { Loader2, Download, AlertTriangle, CheckCircle2, FileText, ChevronLeft, ShieldAlert, MessageSquare, Send, RefreshCw, X, Bug, FileDown, Layers } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export default function PRDViewer() {
     const { id } = useParams<{ id: string }>();
@@ -17,6 +18,9 @@ export default function PRDViewer() {
     const [chatInput, setChatInput] = useState('');
     const [showChat, setShowChat] = useState(false);
     const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'ai', content: string }[]>([]);
+    const [testCases, setTestCases] = useState<any[]>([]);
+    const [isGeneratingTestCases, setIsGeneratingTestCases] = useState(false);
+    const [activeTab, setActiveTab] = useState<'prd' | 'testcases'>('prd');
     const prdContentRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -34,6 +38,18 @@ export default function PRDViewer() {
                 if (response.data.status === 'completed' || response.data.status === 'failed') {
                     clearInterval(interval);
                     setLoading(false);
+
+                    // Also fetch test cases if PRD is completed
+                    if (response.data.status === 'completed') {
+                        try {
+                            const tcResponse = await axios.get(`http://localhost:8000/api/v1/prds/${id}/test-cases`);
+                            if (tcResponse.data && tcResponse.data.test_cases) {
+                                setTestCases(tcResponse.data.test_cases);
+                            }
+                        } catch (tcErr) {
+                            console.error('Error fetching test cases:', tcErr);
+                        }
+                    }
                 }
             } catch (err: any) {
                 console.error('Error fetching PRD:', err);
@@ -254,6 +270,64 @@ export default function PRDViewer() {
         }
     };
 
+    const handleGenerateTestCases = async () => {
+        if (isGeneratingTestCases) return;
+
+        setIsGeneratingTestCases(true);
+        setActiveTab('testcases');
+
+        try {
+            const response = await axios.post(`http://localhost:8000/api/v1/prds/${id}/generate-test-cases`);
+            if (response.data && response.data.test_cases) {
+                setTestCases(response.data.test_cases);
+            }
+        } catch (err: any) {
+            console.error('Error generating test cases:', err);
+            const errorMessage = err.response?.data?.detail || 'Failed to generate test cases. Please try again.';
+            alert(errorMessage);
+        } finally {
+            setIsGeneratingTestCases(false);
+        }
+    };
+
+    const handleDownloadTestCases = (format: 'csv' | 'xlsx') => {
+        if (!testCases || testCases.length === 0) {
+            alert('No test cases to download.');
+            return;
+        }
+
+        const fileName = `TestCases_${data.filename?.split('.')[0] || 'Export'}`;
+
+        // Prepare data for export with requested column headers
+        const exportData = testCases.map(tc => ({
+            'Scenario': tc.scenario,
+            'Testing Type': tc.testing_type,
+            'Severity': tc.severity,
+            'Priority': tc.priority,
+            'Feature Name': tc.feature_name,
+            'Sub Feature Name': tc.sub_feature_name,
+            'Test Conditions': tc.test_conditions,
+            'Test Idea': tc.test_idea,
+            'Test Data': tc.test_data,
+            'Acceptance Criteria': tc.acceptance_criteria,
+            'Test Steps': tc.test_steps
+        }));
+
+        const ws = XLSX.utils.json_to_sheet(exportData);
+
+        if (format === 'csv') {
+            const csv = XLSX.utils.sheet_to_csv(ws);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            saveAs(blob, `${fileName}.csv`);
+        } else {
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Test Cases");
+            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+            const blob = new Blob([wbout], { type: 'application/octet-stream' });
+            saveAs(blob, `${fileName}.xlsx`);
+        }
+    };
+
     if (loading && !data) {
         return (
             <div className="flex flex-col justify-center items-center h-64 space-y-4">
@@ -368,18 +442,144 @@ export default function PRDViewer() {
                                     <MessageSquare className={`w-3.5 h-3.5 mr-1.5 ${showChat ? 'animate-pulse' : ''}`} />
                                     {showChat ? "Hide AI Panel" : "Refine with AI"}
                                 </button>
+                                <button
+                                    onClick={handleGenerateTestCases}
+                                    disabled={isGeneratingTestCases}
+                                    className={`inline-flex items-center px-4 py-1.5 shadow-sm text-xs font-bold rounded-lg transition-all duration-200 ${activeTab === 'testcases'
+                                        ? 'bg-emerald-600 text-white ring-2 ring-emerald-100'
+                                        : 'bg-white border border-slate-300 text-slate-700 hover:bg-slate-50 hover:text-emerald-600'
+                                        }`}
+                                >
+                                    {isGeneratingTestCases ? (
+                                        <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                                    ) : (
+                                        <Bug className="w-3.5 h-3.5 mr-1.5" />
+                                    )}
+                                    {testCases.length > 0 ? "Regenerate Test Cases" : "Generate Test Cases"}
+                                </button>
                             </div>
                         </div>
-                        <div ref={prdContentRef} className="p-8 xl:p-10 2xl:px-12 prose prose-slate max-w-none 
-                            prose-headings:text-slate-900 
-                            prose-h1:text-3xl prose-h1:font-black prose-h1:border-b-2 prose-h1:border-blue-100 prose-h1:pb-4 prose-h1:mb-10 prose-h1:mt-16
-                            prose-h2:text-2xl prose-h2:font-extrabold prose-h2:border-b prose-h2:border-slate-100 prose-h2:pb-3 prose-h2:mt-12 prose-h2:mb-6
-                            prose-h3:text-xl prose-h3:font-bold prose-h3:mt-8 prose-h3:mb-4
-                            prose-p:text-slate-700 prose-p:leading-relaxed prose-p:mb-8 prose-p:text-lg
-                            prose-li:text-slate-700 prose-li:my-2 prose-li:text-lg
-                            prose-ul:my-8
-                            prose-a:text-blue-600 prose-a:font-semibold">
-                            <ReactMarkdown>{analysis?.standardized_prd || "No content generated."}</ReactMarkdown>
+
+                        {/* Tab Switcher */}
+                        {testCases.length > 0 && (
+                            <div className="px-6 border-b border-slate-200 bg-white flex gap-6">
+                                <button
+                                    onClick={() => setActiveTab('prd')}
+                                    className={`py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'prd' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="w-4 h-4" />
+                                        Document
+                                    </div>
+                                </button>
+                                <button
+                                    onClick={() => setActiveTab('testcases')}
+                                    className={`py-3 text-sm font-bold border-b-2 transition-colors ${activeTab === 'testcases' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-800'}`}
+                                >
+                                    <div className="flex items-center gap-2">
+                                        <Bug className="w-4 h-4" />
+                                        Test Cases
+                                        <span className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded-full">{testCases.length}</span>
+                                    </div>
+                                </button>
+                            </div>
+                        )}
+
+                        <div ref={prdContentRef} className="p-8 xl:p-10 2xl:px-12">
+                            {activeTab === 'prd' ? (
+                                <div className="prose prose-slate max-w-none 
+                                    prose-headings:text-slate-900 
+                                    prose-h1:text-3xl prose-h1:font-black prose-h1:border-b-2 prose-h1:border-blue-100 prose-h1:pb-4 prose-h1:mb-10 prose-h1:mt-16
+                                    prose-h2:text-2xl prose-h2:font-extrabold prose-h2:border-b prose-h2:border-slate-100 prose-h2:pb-3 prose-h2:mt-12 prose-h2:mb-6
+                                    prose-h3:text-xl prose-h3:font-bold prose-h3:mt-8 prose-h3:mb-4
+                                    prose-p:text-slate-700 prose-p:leading-relaxed prose-p:mb-8 prose-p:text-lg
+                                    prose-li:text-slate-700 prose-li:my-2 prose-li:text-lg
+                                    prose-ul:my-8
+                                    prose-a:text-blue-600 prose-a:font-semibold">
+                                    <ReactMarkdown>{analysis?.standardized_prd || "No content generated."}</ReactMarkdown>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    <div className="flex justify-between items-center bg-emerald-50 p-4 rounded-xl border border-emerald-100">
+                                        <div>
+                                            <h3 className="text-emerald-900 font-bold flex items-center gap-2">
+                                                <Layers className="w-5 h-5" />
+                                                Generated Test Cases
+                                            </h3>
+                                            <p className="text-emerald-700 text-sm mt-1">Generated based on the PRD analysis and identified risks.</p>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => handleDownloadTestCases('csv')}
+                                                className="inline-flex items-center px-4 py-2 bg-white border border-emerald-200 text-emerald-700 text-sm font-bold rounded-lg hover:bg-emerald-50 transition-colors shadow-sm"
+                                            >
+                                                <FileDown className="w-4 h-4 mr-2" />
+                                                CSV
+                                            </button>
+                                            <button
+                                                onClick={() => handleDownloadTestCases('xlsx')}
+                                                className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-bold rounded-lg hover:bg-emerald-700 transition-colors shadow-sm"
+                                            >
+                                                <FileDown className="w-4 h-4 mr-2" />
+                                                Excel
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {isGeneratingTestCases ? (
+                                        <div className="flex flex-col items-center justify-center py-24 space-y-4">
+                                            <Loader2 className="w-12 h-12 text-emerald-600 animate-spin" />
+                                            <p className="text-slate-500 font-medium animate-pulse">AI is crafting comprehensive test scenarios...</p>
+                                        </div>
+                                    ) : (
+                                        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-sm bg-white">
+                                            <table className="w-full text-left border-collapse min-w-[1200px]">
+                                                <thead>
+                                                    <tr className="bg-slate-50 border-b border-slate-200">
+                                                        <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Scenario</th>
+                                                        <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Type</th>
+                                                        <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Severity</th>
+                                                        <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Priority</th>
+                                                        <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Feature</th>
+                                                        <th className="px-4 py-3 text-xs font-bold text-slate-500 uppercase tracking-wider">Expectation / Criteria</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100">
+                                                    {testCases.map((tc, idx) => (
+                                                        <tr key={idx} className="hover:bg-slate-50/50 transition-colors group">
+                                                            <td className="px-4 py-4 min-w-[250px]">
+                                                                <div className="text-sm font-bold text-slate-900">{tc.scenario}</div>
+                                                                <div className="text-xs text-slate-500 mt-1 line-clamp-2 italic group-hover:line-clamp-none transition-all">{tc.test_idea}</div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <span className="px-2 py-1 rounded bg-blue-50 text-blue-700 text-[10px] font-bold uppercase">{tc.testing_type}</span>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${tc.severity === 'Critical' ? 'bg-rose-50 text-rose-700' :
+                                                                    tc.severity === 'High' ? 'bg-orange-50 text-orange-700' :
+                                                                        'bg-slate-100 text-slate-600'
+                                                                    }`}>{tc.severity}</span>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <span className="text-sm font-bold text-slate-700">{tc.priority}</span>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className="text-xs font-medium text-slate-700">{tc.feature_name}</div>
+                                                                <div className="text-[10px] text-slate-400">{tc.sub_feature_name}</div>
+                                                            </td>
+                                                            <td className="px-4 py-4">
+                                                                <div className="text-xs text-slate-600 leading-relaxed border-l-2 border-emerald-200 pl-3">
+                                                                    {tc.acceptance_criteria}
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>

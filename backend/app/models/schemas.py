@@ -26,3 +26,20 @@ class ChatResponse(BaseModel):
     action: str  # "chat" or "update"
     message: str
     analysis: Optional[AnalysisResultSchema] = None
+
+class TestCaseSchema(BaseModel):
+    scenario: str
+    testing_type: str
+    severity: str
+    priority: str
+    feature_name: str
+    sub_feature_name: str
+    test_conditions: str
+    test_idea: str
+    test_data: str
+    acceptance_criteria: str
+    test_steps: str
+
+class TestCaseListResponse(BaseModel):
+    prd_id: str
+    test_cases: List[TestCaseSchema]

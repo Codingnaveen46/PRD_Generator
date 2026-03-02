@@ -3,13 +3,23 @@ from typing import List
 import uuid
 
 from app.core.database import supabase
-from app.models.schemas import PRDResponse, PRDDetailResponse, AnalysisResultSchema, RefinementRequest, ChatRequest, ChatResponse
+from app.models.schemas import (
+    PRDResponse, 
+    PRDDetailResponse, 
+    AnalysisResultSchema, 
+    RefinementRequest, 
+    ChatRequest, 
+    ChatResponse,
+    TestCaseSchema,
+    TestCaseListResponse
+)
 from app.services.extractor import extract_text
 from app.services.analyzer import (
     analyze_prd_text,
     refine_prd_text,
     chat_with_prd,
     calculate_dynamic_quality_score,
+    generate_test_cases,
     TARGET_FINAL_SCORE,
 )
 
@@ -315,4 +325,57 @@ async def chat_prd(prd_id: str, request: ChatRequest):
         raise
     except Exception as e:
         print(f"Error in chat endpoint: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/prds/{prd_id}/generate-test-cases", response_model=TestCaseListResponse)
+async def create_test_cases(prd_id: str):
+    try:
+        # 1. Get PRD analysis
+        analysis_res = supabase.table("analysis_results").select("standardized_prd").eq("prd_id", prd_id).execute()
+        if not analysis_res.data:
+            raise HTTPException(status_code=400, detail="PRD has no analysis to generate test cases from")
+            
+        prd_text = analysis_res.data[0]['standardized_prd']
+        
+        # 2. Generate test cases
+        print(f"Generating test cases for PRD {prd_id}...")
+        test_cases = await generate_test_cases(prd_text)
+        
+        if not test_cases:
+            raise HTTPException(status_code=500, detail="AI failed to generate test cases. Please try again.")
+            
+        # 3. Store in database
+        try:
+            # Delete existing test cases for this PRD first if any
+            supabase.table("test_cases").delete().eq("prd_id", prd_id).execute()
+            
+            insert_data = []
+            for tc in test_cases:
+                tc_dict = tc.model_dump() if hasattr(tc, 'model_dump') else tc.dict()
+                tc_dict['prd_id'] = prd_id
+                insert_data.append(tc_dict)
+                
+            supabase.table("test_cases").insert(insert_data).execute()
+        except Exception as db_err:
+            print(f"Database error while saving test cases: {db_err}")
+            if "relation \"public.test_cases\" does not exist" in str(db_err):
+                 raise HTTPException(status_code=500, detail="Database table 'test_cases' is missing. Please run the SQL migration in Supabase.")
+            raise HTTPException(status_code=500, detail=f"Failed to save test cases to database: {str(db_err)}")
+        
+        return TestCaseListResponse(prd_id=prd_id, test_cases=test_cases)
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating test cases: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/prds/{prd_id}/test-cases", response_model=TestCaseListResponse)
+async def get_test_cases(prd_id: str):
+    try:
+        res = supabase.table("test_cases").select("*").eq("prd_id", prd_id).execute()
+        test_cases = [TestCaseSchema(**item) for item in res.data]
+        return TestCaseListResponse(prd_id=prd_id, test_cases=test_cases)
+    except Exception as e:
+        print(f"Error fetching test cases: {e}")
         raise HTTPException(status_code=500, detail=str(e))
