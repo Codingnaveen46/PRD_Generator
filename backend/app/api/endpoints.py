@@ -3,11 +3,12 @@ from typing import List
 import uuid
 
 from app.core.database import supabase
-from app.models.schemas import PRDResponse, PRDDetailResponse, AnalysisResultSchema, RefinementRequest
+from app.models.schemas import PRDResponse, PRDDetailResponse, AnalysisResultSchema, RefinementRequest, ChatRequest, ChatResponse
 from app.services.extractor import extract_text
 from app.services.analyzer import (
     analyze_prd_text,
     refine_prd_text,
+    chat_with_prd,
     calculate_dynamic_quality_score,
     TARGET_FINAL_SCORE,
 )
@@ -230,4 +231,64 @@ async def refine_prd(prd_id: str, request: RefinementRequest):
         
     except Exception as e:
         print(f"Error refining PRD: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/prds/{prd_id}/chat", response_model=ChatResponse)
+async def chat_prd(prd_id: str, request: ChatRequest):
+    try:
+        # 1. Get current PRD and analysis
+        prd_res = supabase.table("prds").select("*").eq("id", prd_id).execute()
+        if not prd_res.data:
+            raise HTTPException(status_code=404, detail="PRD not found")
+
+        analysis_res = supabase.table("analysis_results").select("*").eq("prd_id", prd_id).execute()
+        if not analysis_res.data:
+            raise HTTPException(status_code=400, detail="PRD has no analysis yet")
+
+        current_analysis = analysis_res.data[0]
+        current_prd_text = current_analysis.get("standardized_prd", "")
+
+        # 2. Call the chat function that classifies intent
+        chat_result = await chat_with_prd(current_prd_text, request.message)
+
+        action = chat_result["action"]
+        ai_message = chat_result["message"]
+        new_analysis = chat_result.get("analysis")
+
+        response_analysis = None
+
+        # 3. If the AI decided to update, persist changes
+        if action == "update" and new_analysis:
+            current_score = int(current_analysis.get("quality_score") or 0)
+            current_missing_count = len(current_analysis.get("missing_requirements") or [])
+            new_missing_count = len(new_analysis.missing_requirements or [])
+
+            adjusted_score = new_analysis.quality_score
+            if new_missing_count <= current_missing_count:
+                adjusted_score = max(adjusted_score, current_score)
+            if new_missing_count < current_missing_count:
+                improvement = (current_missing_count - new_missing_count) * 6
+                adjusted_score = max(adjusted_score, min(100, current_score + improvement))
+            adjusted_score = max(adjusted_score, TARGET_FINAL_SCORE)
+            new_analysis.quality_score = adjusted_score
+
+            supabase.table("analysis_results").update({
+                "standardized_prd": new_analysis.standardized_prd,
+                "quality_score": new_analysis.quality_score,
+                "missing_requirements": new_analysis.missing_requirements,
+                "qa_risk_insights": new_analysis.qa_risk_insights,
+            }).eq("prd_id", prd_id).execute()
+
+            response_analysis = new_analysis
+
+        return ChatResponse(
+            action=action,
+            message=ai_message,
+            analysis=response_analysis,
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error in chat endpoint: {e}")
         raise HTTPException(status_code=500, detail=str(e))
