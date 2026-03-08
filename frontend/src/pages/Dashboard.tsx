@@ -270,7 +270,7 @@ export default function Dashboard() {
 
     return (
         <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,_rgba(191,219,254,0.45),_transparent_28%),linear-gradient(180deg,_#f8fbff_0%,_#ffffff_48%,_#f8fafc_100%)]">
-            <div className="sticky top-0 z-30 border-b border-slate-200/70 bg-white/82 backdrop-blur-xl shadow-sm">
+            <div className="sticky top-0 z-30 border-b premium-divider bg-white/82 backdrop-blur-xl shadow-sm">
                 <div className="mx-auto w-full max-w-[1800px] px-4 py-6 sm:px-6 lg:px-8">
                     <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
                         <div className="max-w-2xl">
@@ -338,19 +338,19 @@ export default function Dashboard() {
                     )}
 
                     <div className="grid gap-4 md:grid-cols-3">
-                        <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/88 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur">
+                        <div className="premium-surface premium-hover-card rounded-[1.75rem] p-5 backdrop-blur">
                             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">Documents</p>
                             <p className="mt-3 text-3xl font-black text-slate-950">{prds.length}</p>
                             <p className="mt-2 text-sm text-slate-600">Uploaded across your workspace.</p>
                         </div>
 
-                        <div className="rounded-[1.75rem] border border-blue-200/80 bg-blue-50/80 p-5 shadow-[0_18px_40px_rgba(37,99,235,0.08)] backdrop-blur">
+                        <div className="premium-surface premium-hover-card rounded-[1.75rem] p-5 backdrop-blur">
                             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-blue-700">AI Insights Ready</p>
                             <p className="mt-3 text-3xl font-black text-slate-950">{completedCount}</p>
                             <p className="mt-2 text-sm text-blue-900/80">Completed analyses ready to review.</p>
                         </div>
 
-                        <div className="rounded-[1.75rem] border border-slate-200/80 bg-white/88 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.06)] backdrop-blur">
+                        <div className="premium-surface premium-hover-card rounded-[1.75rem] p-5 backdrop-blur">
                             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-slate-500">In Progress</p>
                             <div className="mt-3 flex items-center gap-3">
                                 <p className="text-3xl font-black text-slate-950">{processingCount}</p>
@@ -362,7 +362,7 @@ export default function Dashboard() {
                         </div>
                     </div>
 
-                    <div className="rounded-[2rem] border border-slate-200/80 bg-white/82 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.06)] backdrop-blur sm:p-6">
+                    <div className="premium-surface rounded-[2rem] p-5 backdrop-blur sm:p-6">
                         <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
                             <div>
                                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-700">Documents</p>
@@ -416,7 +416,7 @@ export default function Dashboard() {
                                         <div key={prd.id} className="group">
                                             <div
                                                 className={clsx(
-                                                    'cursor-pointer overflow-hidden rounded-[1.75rem] border border-slate-200/80 bg-white px-5 py-5 shadow-[0_18px_45px_rgba(15,23,42,0.05)] transition duration-300 hover:-translate-y-1 hover:border-blue-200 hover:shadow-[0_28px_60px_rgba(37,99,235,0.10)] sm:px-6',
+                                                    'premium-surface premium-hover-card cursor-pointer overflow-hidden rounded-[1.75rem] px-5 py-5 sm:px-6',
                                                     deletingId === prd.id && 'pointer-events-none opacity-70',
                                                 )}
                                                 onClick={() => navigate(`/prd/${prd.id}`)}
@@ -515,7 +515,7 @@ export default function Dashboard() {
                 </section>
 
                 <aside className="space-y-6">
-                    <div className="rounded-[2rem] border border-slate-200/80 bg-white/86 p-5 shadow-[0_24px_60px_rgba(15,23,42,0.06)] backdrop-blur sm:p-6">
+                    <div className="premium-surface rounded-[2rem] p-5 backdrop-blur sm:p-6">
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-sm font-semibold uppercase tracking-[0.24em] text-blue-700">Quick Upload</p>

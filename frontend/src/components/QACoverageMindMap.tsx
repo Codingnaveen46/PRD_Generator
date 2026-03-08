@@ -392,7 +392,7 @@ function FlowCanvas({
     viewportKey: string;
 }) {
     return (
-        <div className={`qa-flow overflow-auto rounded-[1.3rem] border border-slate-800/80 bg-[#08101f] ${heightClassName}`}>
+        <div className={`qa-flow premium-focus-surface overflow-auto rounded-[1.3rem] ${heightClassName}`}>
             <div
                 ref={wrapperRef}
                 className="relative"
@@ -579,7 +579,7 @@ export default function QACoverageMindMap({
 
     return (
         <>
-            <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="premium-surface rounded-[1.5rem] p-5 shadow-sm">
                 <div className="mb-5 flex flex-wrap items-center justify-between gap-4 rounded-[1.25rem] border border-blue-100 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.14),transparent_42%),linear-gradient(180deg,rgba(248,250,252,0.96),rgba(255,255,255,1))] p-4">
                     <div>
                         <div className="flex items-center gap-2 text-lg font-bold text-slate-950">
