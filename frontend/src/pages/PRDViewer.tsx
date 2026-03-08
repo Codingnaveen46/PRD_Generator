@@ -423,7 +423,7 @@ function CollapsibleSection({
     children: ReactNode;
 }) {
     return (
-        <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+        <div className="premium-surface overflow-hidden rounded-[1.5rem] shadow-sm">
             <button
                 type="button"
                 onClick={onToggle}
@@ -1090,8 +1090,8 @@ export default function PRDViewer() {
             <div className={viewerGridClass}>
                 {/* Main Document Panel */}
                 <div className="min-w-0">
-                    <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                        <div className="px-6 py-5 border-b border-slate-200 bg-slate-50 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
+                    <div className="premium-surface rounded-xl shadow-sm overflow-hidden">
+                        <div className="premium-divider border-b bg-slate-50/85 px-6 py-5 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
                             <div>
                                 <h2 className="text-xl font-bold flex items-center gap-2 text-slate-900">
                                     <FileText className="w-5 h-5 text-blue-600" />
@@ -1326,7 +1326,7 @@ export default function PRDViewer() {
                                                 </div>
                                             </div>
 
-                                            <div className="overflow-hidden rounded-[1.5rem] border border-slate-200 bg-white shadow-sm">
+                                            <div className="premium-surface overflow-hidden rounded-[1.5rem] shadow-sm">
                                                 <div className="max-h-[780px] overflow-auto">
                                                     <table className="w-full min-w-[1320px] border-collapse text-left">
                                                         <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur">
@@ -1804,7 +1804,7 @@ export default function PRDViewer() {
                                             </div>
 
                                             <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
-                                                <div ref={automationPanelRef} className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                                                <div ref={automationPanelRef} className="premium-surface rounded-[1.5rem] p-5 shadow-sm">
                                                     <div className="mb-5 flex items-center gap-2 text-lg font-bold text-slate-950">
                                                         <Bug className="h-5 w-5 text-blue-600" />
                                                         Automation Test Generation
@@ -1866,7 +1866,7 @@ export default function PRDViewer() {
                                                     )}
 
                                                     {automationScript && (
-                                                        <div className="mt-5 overflow-hidden rounded-[1.35rem] border border-slate-800 bg-[#0b1220] shadow-[0_30px_80px_rgba(15,23,42,0.28)]">
+                                                        <div className="premium-focus-surface mt-5 overflow-hidden rounded-[1.35rem] shadow-[0_30px_80px_rgba(15,23,42,0.28)]">
                                                             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-950/90 px-4 py-3">
                                                                 <div className="flex min-w-0 items-center gap-3">
                                                                     <div className="rounded-xl border border-slate-700 bg-slate-900 p-2 text-slate-300">
@@ -1935,7 +1935,7 @@ export default function PRDViewer() {
                                                         onSelectionChange={setMindMapSelection}
                                                     />
 
-                                                    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-5 shadow-sm">
+                                                    <div className="premium-surface rounded-[1.5rem] p-5 shadow-sm">
                                                         <div className="mb-4 flex items-center gap-2 text-lg font-bold text-slate-950">
                                                             <CircleAlert className="h-5 w-5 text-violet-600" />
                                                             Related Test Scenarios
@@ -2070,7 +2070,7 @@ export default function PRDViewer() {
 
                 {/* Intelligence Sidebar */}
                 <div className={`${showChat ? 'hidden xl:flex' : 'flex'} min-w-0 flex-col gap-6 xl:sticky xl:top-24 transition-opacity duration-300`}>
-                    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="premium-surface rounded-[1.5rem] p-6 shadow-sm">
                         <div className="flex items-start justify-between gap-4">
                             <div>
                                 <p className="text-sm font-bold uppercase tracking-[0.24em] text-blue-700">AI Intelligence</p>
@@ -2120,7 +2120,7 @@ export default function PRDViewer() {
                         </div>
                     </div>
 
-                    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="premium-surface rounded-[1.5rem] p-6 shadow-sm">
                         <div className="flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-amber-500" />
                             <h3 className="text-lg font-bold text-slate-950">Missing Requirements</h3>
@@ -2167,7 +2167,7 @@ export default function PRDViewer() {
                         </div>
                     </div>
 
-                    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-6 shadow-sm">
+                    <div className="premium-surface rounded-[1.5rem] p-6 shadow-sm">
                         <div className="flex items-center gap-2">
                             <ShieldAlert className="h-5 w-5 text-rose-500" />
                             <h3 className="text-lg font-bold text-slate-950">QA Technical Risks</h3>
