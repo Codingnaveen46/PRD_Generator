@@ -11,8 +11,8 @@ export default function Layout() {
     const userEmail = user?.email ?? "Authenticated user";
 
     const handleSignOut = async () => {
+        navigate('/', { replace: true, state: { loggedOut: true } });
         await signOut();
-        navigate('/login', { replace: true });
     };
 
     return (
