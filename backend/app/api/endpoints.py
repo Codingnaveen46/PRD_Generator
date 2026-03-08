@@ -7,9 +7,12 @@ from app.models.schemas import (
     PRDResponse, 
     PRDDetailResponse, 
     AnalysisResultSchema, 
+    AutomationScriptRequest,
+    AutomationScriptResponse,
     RefinementRequest, 
     ChatRequest, 
     ChatResponse,
+    QAIntelligenceResponse,
     TestCaseSchema,
     TestCaseListResponse
 )
@@ -19,6 +22,8 @@ from app.services.analyzer import (
     refine_prd_text,
     chat_with_prd,
     calculate_dynamic_quality_score,
+    generate_automation_script,
+    generate_qa_intelligence,
     generate_test_cases,
     TARGET_FINAL_SCORE,
 )
@@ -379,3 +384,43 @@ async def get_test_cases(prd_id: str):
     except Exception as e:
         print(f"Error fetching test cases: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/prds/{prd_id}/qa-intelligence", response_model=QAIntelligenceResponse)
+async def get_qa_intelligence(prd_id: str):
+    try:
+        analysis_res = supabase.table("analysis_results").select("standardized_prd").eq("prd_id", prd_id).execute()
+        if not analysis_res.data:
+            raise HTTPException(status_code=400, detail="PRD has no analysis to evaluate")
+
+        test_case_res = supabase.table("test_cases").select("*").eq("prd_id", prd_id).execute()
+        test_cases = [TestCaseSchema(**item) for item in test_case_res.data]
+        if not test_cases:
+            raise HTTPException(status_code=400, detail="Generate test cases before requesting QA intelligence")
+
+        intelligence = await generate_qa_intelligence(
+            analysis_res.data[0]["standardized_prd"],
+            test_cases,
+        )
+        return QAIntelligenceResponse(prd_id=prd_id, intelligence=intelligence)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating QA intelligence: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/prds/{prd_id}/automation-script", response_model=AutomationScriptResponse)
+async def create_automation_script(prd_id: str, request: AutomationScriptRequest):
+    try:
+        prd_res = supabase.table("prds").select("id").eq("id", prd_id).execute()
+        if not prd_res.data:
+            raise HTTPException(status_code=404, detail="PRD not found")
+
+        return await generate_automation_script(request)
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Error generating automation script: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    

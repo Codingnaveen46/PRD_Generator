@@ -20,7 +20,7 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
     if (loading) return <AuthLoadingScreen />;
     if (!user) {
-        return <Navigate to="/login" replace state={{ from: location.pathname }} />;
+        return <Navigate to="/" replace state={{ from: location.pathname }} />;
     }
 
     return <>{children}</>;
