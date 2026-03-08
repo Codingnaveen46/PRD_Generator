@@ -9,6 +9,9 @@ import {
     MiniMap,
     Position,
     ReactFlow,
+    getNodesBounds,
+    getViewportForBounds,
+    type ReactFlowInstance,
     type Edge,
     type Node,
     type NodeProps,
@@ -78,6 +81,9 @@ const MIN_CANVAS_HEIGHT = 420;
 const COLUMN_GAP = 220;
 const NODE_GAP = 56;
 const MODULE_GAP = 88;
+const EXPORT_PADDING = 40;
+const PNG_PIXEL_RATIO = 2;
+const HIGH_RES_PNG_PIXEL_RATIO = 3;
 
 const statusPresentation: Record<CoverageStatus, { border: string; bg: string; text: string; dot: string }> = {
     full: {
@@ -366,12 +372,144 @@ function buildFlowElements(
     };
 }
 
-function shouldExcludeFromExport(node: HTMLElement) {
-    return (
-        node.classList?.contains('react-flow__controls')
-        || node.classList?.contains('react-flow__minimap')
-        || node.classList?.contains('react-flow__panel')
+function getLogicalBounds(nodes: Node<MindMapNodeData>[]) {
+    return getNodesBounds(
+        nodes.map((node) => {
+            const size = getNodeSize(node.data.nodeType);
+
+            return {
+                ...node,
+                width: size.width,
+                height: size.height,
+            };
+        }),
     );
+}
+
+function getExportBounds(
+    nodes: Node<MindMapNodeData>[],
+    flowInstance: ReactFlowInstance | null,
+) {
+    const measuredNodes = flowInstance?.getNodes() ?? [];
+    const nodesWithMeasurements = measuredNodes.filter(
+        (node) => typeof node.width === 'number' && typeof node.height === 'number',
+    );
+
+    if (nodesWithMeasurements.length) {
+        return getNodesBounds(nodesWithMeasurements);
+    }
+
+    return getLogicalBounds(nodes);
+}
+
+function waitForPaint() {
+    return new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => resolve());
+        });
+    });
+}
+
+function prepareExportSurface(
+    target: HTMLDivElement,
+    nodes: Node<MindMapNodeData>[],
+    flowInstance: ReactFlowInstance | null,
+) {
+    const flowRoot = target.querySelector<HTMLElement>('.react-flow');
+    const viewportElement = flowRoot?.querySelector<HTMLElement>('.react-flow__viewport');
+    const containerElement = flowRoot?.querySelector<HTMLElement>('.react-flow__container');
+    const rendererElement = flowRoot?.querySelector<HTMLElement>('.react-flow__renderer');
+
+    if (!flowRoot || !viewportElement) {
+        throw new Error('Could not find React Flow export surface.');
+    }
+
+    const bounds = getExportBounds(nodes, flowInstance);
+    const paddedBounds = {
+        x: bounds.x - EXPORT_PADDING,
+        y: bounds.y - EXPORT_PADDING,
+        width: bounds.width + EXPORT_PADDING * 2,
+        height: bounds.height + EXPORT_PADDING * 2,
+    };
+    const exportWidth = Math.max(640, Math.ceil(paddedBounds.width));
+    const exportHeight = Math.max(360, Math.ceil(paddedBounds.height));
+    const framedViewport = getViewportForBounds(paddedBounds, exportWidth, exportHeight, 0.1, 1.5, 0);
+
+    const hiddenElements = Array.from(
+        flowRoot.querySelectorAll<HTMLElement>('.react-flow__controls, .react-flow__minimap, .react-flow__panel'),
+    );
+    const hiddenElementDisplays = hiddenElements.map((element) => element.style.display);
+
+    const originalRootStyle = {
+        width: flowRoot.style.width,
+        height: flowRoot.style.height,
+        overflow: flowRoot.style.overflow,
+        background: flowRoot.style.background,
+        borderRadius: flowRoot.style.borderRadius,
+    };
+    const originalContainerStyle = containerElement
+        ? { width: containerElement.style.width, height: containerElement.style.height }
+        : null;
+    const originalRendererStyle = rendererElement
+        ? { width: rendererElement.style.width, height: rendererElement.style.height }
+        : null;
+    const originalViewportStyle = {
+        transform: viewportElement.style.transform,
+        transformOrigin: viewportElement.style.transformOrigin,
+    };
+
+    hiddenElements.forEach((element) => {
+        element.style.display = 'none';
+    });
+
+    flowRoot.style.width = `${exportWidth}px`;
+    flowRoot.style.height = `${exportHeight}px`;
+    flowRoot.style.overflow = 'hidden';
+    flowRoot.style.background = '#08101f';
+    flowRoot.style.borderRadius = '0';
+
+    if (containerElement) {
+        containerElement.style.width = `${exportWidth}px`;
+        containerElement.style.height = `${exportHeight}px`;
+    }
+
+    if (rendererElement) {
+        rendererElement.style.width = `${exportWidth}px`;
+        rendererElement.style.height = `${exportHeight}px`;
+    }
+
+    viewportElement.style.transform = `translate(${framedViewport.x}px, ${framedViewport.y}px) scale(${framedViewport.zoom})`;
+    viewportElement.style.transformOrigin = 'top left';
+
+    return {
+        flowRoot,
+        exportWidth,
+        exportHeight,
+        cleanup: () => {
+            flowRoot.style.width = originalRootStyle.width;
+            flowRoot.style.height = originalRootStyle.height;
+            flowRoot.style.overflow = originalRootStyle.overflow;
+            flowRoot.style.background = originalRootStyle.background;
+            flowRoot.style.borderRadius = originalRootStyle.borderRadius;
+
+            if (containerElement && originalContainerStyle) {
+                containerElement.style.width = originalContainerStyle.width;
+                containerElement.style.height = originalContainerStyle.height;
+            }
+
+            if (rendererElement && originalRendererStyle) {
+                rendererElement.style.width = originalRendererStyle.width;
+                rendererElement.style.height = originalRendererStyle.height;
+            }
+
+            viewportElement.style.transform = originalViewportStyle.transform;
+            viewportElement.style.transformOrigin = originalViewportStyle.transformOrigin;
+
+            hiddenElements.forEach((element, index) => {
+                element.style.display = hiddenElementDisplays[index] || '';
+            });
+        },
+    };
 }
 
 function FlowCanvas({
@@ -382,6 +520,7 @@ function FlowCanvas({
     canvasWidth,
     canvasHeight,
     viewportKey,
+    onInit,
 }: {
     nodes: Node<MindMapNodeData>[];
     edges: Edge[];
@@ -390,6 +529,7 @@ function FlowCanvas({
     canvasWidth: number;
     canvasHeight: number;
     viewportKey: string;
+    onInit?: (instance: ReactFlowInstance) => void;
 }) {
     return (
         <div className={`qa-flow premium-focus-surface overflow-auto rounded-[1.3rem] ${heightClassName}`}>
@@ -416,6 +556,7 @@ function FlowCanvas({
                     nodesDraggable
                     proOptions={{ hideAttribution: true }}
                     className="bg-transparent"
+                    onInit={onInit}
                     defaultEdgeOptions={{
                         type: 'bezier',
                         animated: false,
@@ -453,6 +594,8 @@ export default function QACoverageMindMap({
     const [collapsedModules, setCollapsedModules] = useState<Record<string, boolean>>({});
     const inlineWrapperRef = useRef<HTMLDivElement>(null);
     const modalWrapperRef = useRef<HTMLDivElement>(null);
+    const inlineFlowRef = useRef<ReactFlowInstance | null>(null);
+    const modalFlowRef = useRef<ReactFlowInstance | null>(null);
 
     useEffect(() => {
         setCollapsedModules(
@@ -510,38 +653,46 @@ export default function QACoverageMindMap({
         [nodes],
     );
 
-    const handleExport = async (format: 'png' | 'svg' | 'pdf') => {
+    const handleExport = async (format: 'png' | 'png-hd' | 'svg' | 'pdf') => {
         const target = modalWrapperRef.current || inlineWrapperRef.current;
+        const flowInstance = modalWrapperRef.current ? modalFlowRef.current : inlineFlowRef.current;
         if (!target) return;
 
+        let cleanupExportSurface: (() => void) | null = null;
+
         try {
+            flowInstance?.fitView({ padding: 0.18, maxZoom: 1 });
+            await waitForPaint();
+
+            const { flowRoot, exportWidth, exportHeight, cleanup } = prepareExportSurface(target, nodes, flowInstance);
+            cleanupExportSurface = cleanup;
+            await waitForPaint();
+
             const exportOptions = {
                 cacheBust: true,
-                pixelRatio: 2,
                 skipAutoScale: true,
                 backgroundColor: '#08101f',
-                width: canvasWidth,
-                height: canvasHeight,
-                canvasWidth,
-                canvasHeight,
+                width: exportWidth,
+                height: exportHeight,
+                canvasWidth: exportWidth,
+                canvasHeight: exportHeight,
                 style: {
-                    width: `${canvasWidth}px`,
-                    height: `${canvasHeight}px`,
-                    minWidth: `${canvasWidth}px`,
-                    minHeight: `${canvasHeight}px`,
-                    overflow: 'hidden',
+                    width: `${exportWidth}px`,
+                    height: `${exportHeight}px`,
                 },
-                filter: (node: HTMLElement) => !shouldExcludeFromExport(node),
             };
 
             if (format === 'svg') {
-                const dataUrl = await toSvg(target, exportOptions);
+                const dataUrl = await toSvg(flowRoot, exportOptions);
                 const svgBlob = await fetch(dataUrl).then((response) => response.blob());
                 saveAs(svgBlob, 'coverage-mind-map.svg');
                 return;
             }
 
-            const pngBlob = await toBlob(target, exportOptions);
+            const pngBlob = await toBlob(flowRoot, {
+                ...exportOptions,
+                pixelRatio: format === 'png-hd' ? HIGH_RES_PNG_PIXEL_RATIO : PNG_PIXEL_RATIO,
+            });
             if (!pngBlob) {
                 throw new Error('Could not generate image blob.');
             }
@@ -551,29 +702,25 @@ export default function QACoverageMindMap({
                 return;
             }
 
-            const pngDataUrl = await new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    if (typeof reader.result === 'string') {
-                        resolve(reader.result);
-                    } else {
-                        reject(new Error('Failed to convert PNG blob to data URL.'));
-                    }
-                };
-                reader.onerror = () => reject(reader.error || new Error('Failed to read PNG blob.'));
-                reader.readAsDataURL(pngBlob);
-            });
+            if (format === 'png-hd') {
+                saveAs(pngBlob, 'coverage-mind-map@3x.png');
+                return;
+            }
 
             const pdf = new jsPDF({
-                orientation: canvasWidth >= canvasHeight ? 'landscape' : 'portrait',
+                orientation: exportWidth >= exportHeight ? 'landscape' : 'portrait',
                 unit: 'px',
-                format: [canvasWidth, canvasHeight],
+                format: [exportWidth, exportHeight],
             });
-            pdf.addImage(pngDataUrl, 'PNG', 0, 0, canvasWidth, canvasHeight);
+            const svgDataUrl = await toSvg(flowRoot, exportOptions);
+            const svgMarkup = await fetch(svgDataUrl).then((response) => response.text());
+            pdf.addSvgAsImage(svgMarkup, 0, 0, exportWidth, exportHeight);
             pdf.save('coverage-mind-map.pdf');
         } catch (error) {
             console.error('Mind map export failed:', error);
             window.alert('Failed to export the coverage map. Please try again.');
+        } finally {
+            cleanupExportSurface?.();
         }
     };
 
@@ -607,6 +754,14 @@ export default function QACoverageMindMap({
                         >
                             <Download className="h-4 w-4" />
                             Download PNG
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => void handleExport('png-hd')}
+                            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-bold text-slate-700 shadow-sm transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-700"
+                        >
+                            <Download className="h-4 w-4" />
+                            High-Res PNG
                         </button>
                         <button
                             type="button"
@@ -687,6 +842,9 @@ export default function QACoverageMindMap({
                     canvasWidth={canvasWidth}
                     canvasHeight={canvasHeight}
                     viewportKey={viewportKey}
+                    onInit={(instance) => {
+                        inlineFlowRef.current = instance;
+                    }}
                 />
             </div>
 
@@ -717,6 +875,14 @@ export default function QACoverageMindMap({
                                 >
                                     <Download className="h-4 w-4" />
                                     PNG
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleExport('png-hd')}
+                                    className="inline-flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs font-bold text-slate-200 transition hover:border-blue-500/40 hover:bg-slate-800"
+                                >
+                                    <Download className="h-4 w-4" />
+                                    PNG 3x
                                 </button>
                                 <button
                                     type="button"
@@ -754,6 +920,9 @@ export default function QACoverageMindMap({
                                 canvasWidth={canvasWidth}
                                 canvasHeight={canvasHeight}
                                 viewportKey={viewportKey}
+                                onInit={(instance) => {
+                                    modalFlowRef.current = instance;
+                                }}
                             />
                         </div>
 
