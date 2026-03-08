@@ -33,6 +33,7 @@ import {
     TriangleAlert,
     ChevronDown,
     ChevronUp,
+    Info,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import QACoverageMindMap, { type MindMapSelection } from '../components/QACoverageMindMap';
@@ -74,6 +75,8 @@ interface RiskLevelPresentation {
     className: string;
     barClassName: string;
     helperText: string;
+    icon: ReactNode;
+    panelClassName: string;
 }
 
 interface CoverageModule {
@@ -213,6 +216,8 @@ function getRiskLevelPresentation(
             className: 'bg-red-50 text-red-700 border-red-200',
             barClassName: 'bg-red-500',
             helperText: 'Critical issues or low requirement quality need immediate attention.',
+            icon: <AlertTriangle className="h-4 w-4" />,
+            panelClassName: 'border-red-200 bg-red-50/80',
         };
     }
 
@@ -222,6 +227,8 @@ function getRiskLevelPresentation(
             className: 'bg-amber-50 text-amber-700 border-amber-200',
             barClassName: 'bg-amber-400',
             helperText: 'Coverage is useful but there are still gaps worth resolving before implementation.',
+            icon: <TriangleAlert className="h-4 w-4" />,
+            panelClassName: 'border-amber-200 bg-amber-50/80',
         };
     }
 
@@ -230,7 +237,21 @@ function getRiskLevelPresentation(
         className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
         barClassName: 'bg-emerald-500',
         helperText: 'The analysis looks healthy and the document appears relatively actionable.',
+        icon: <ShieldCheck className="h-4 w-4" />,
+        panelClassName: 'border-emerald-200 bg-emerald-50/80',
     };
+}
+
+function getCoverageScoreBarClass(score: number) {
+    if (score <= 50) {
+        return 'bg-red-500';
+    }
+
+    if (score <= 75) {
+        return 'bg-amber-400';
+    }
+
+    return 'bg-emerald-500';
 }
 
 function buildAISuggestions(items: string[], mode: 'missing' | 'risk') {
@@ -456,6 +477,7 @@ export default function PRDViewer() {
     const [isGeneratingAutomation, setIsGeneratingAutomation] = useState(false);
     const [automationError, setAutomationError] = useState<string | null>(null);
     const [copiedAutomation, setCopiedAutomation] = useState(false);
+    const [animatedCoverageScore, setAnimatedCoverageScore] = useState(0);
     const [expandedQaSections, setExpandedQaSections] = useState({
         coverage: true,
         gaps: true,
@@ -581,6 +603,21 @@ export default function PRDViewer() {
 
         setMindMapSelection(null);
     }, [qaIntelligence]);
+
+    const analysis = data?.analysis;
+    const qualityScore = analysis?.quality_score || 0;
+    const missingRequirements = analysis?.missing_requirements || [];
+    const qaRisks = analysis?.qa_risk_insights || [];
+
+    useEffect(() => {
+        setAnimatedCoverageScore(0);
+
+        const animationFrame = window.requestAnimationFrame(() => {
+            setAnimatedCoverageScore(qualityScore);
+        });
+
+        return () => window.cancelAnimationFrame(animationFrame);
+    }, [qualityScore]);
 
     const handleDownload = async (format: 'md' | 'pdf' | 'docx') => {
         console.log('Download requested, data:', data);
@@ -988,10 +1025,6 @@ export default function PRDViewer() {
         );
     }
 
-    const analysis = data?.analysis;
-    const qualityScore = analysis?.quality_score || 0;
-    const missingRequirements = analysis?.missing_requirements || [];
-    const qaRisks = analysis?.qa_risk_insights || [];
     const typeOptions = Array.from(new Set(testCases.map((testCase) => testCase.testing_type).filter(Boolean)));
     const severityOptions = Array.from(new Set(testCases.map((testCase) => testCase.severity).filter(Boolean)));
     const priorityOptions = Array.from(new Set(testCases.map((testCase) => testCase.priority).filter(Boolean)));
@@ -2054,24 +2087,31 @@ export default function PRDViewer() {
                                     <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                                         <Target className="h-4 w-4 text-blue-600" />
                                         Requirement Coverage Score
+                                        <div className="group relative">
+                                            <Info className="h-4 w-4 cursor-help text-slate-400 transition group-hover:text-slate-600" />
+                                            <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-64 -translate-x-1/2 rounded-xl border border-slate-200 bg-white p-3 text-xs font-medium leading-5 text-slate-600 shadow-xl group-hover:block">
+                                                Calculated using mapped requirements, missing requirements, QA risk indicators, and overall test coverage completeness.
+                                            </div>
+                                        </div>
                                     </div>
                                     <span className="text-2xl font-black text-slate-950">{qualityScore}/100</span>
                                 </div>
-                                <div className="mt-4 h-2.5 rounded-full bg-slate-200">
+                                <div className="mt-4 h-2 rounded-full bg-slate-200/90 md:h-2.5">
                                     <div
-                                        className={`h-2.5 rounded-full ${riskLevel.barClassName}`}
-                                        style={{ width: `${qualityScore}%` }}
+                                        className={`h-2 rounded-full transition-[width] duration-1000 ease-out md:h-2.5 ${getCoverageScoreBarClass(qualityScore)}`}
+                                        style={{ width: `${animatedCoverageScore}%` }}
                                     />
                                 </div>
                             </div>
 
-                            <div className="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
+                            <div className={`rounded-[1.25rem] border p-4 ${riskLevel.panelClassName}`}>
                                 <div className="flex items-center gap-2 text-sm font-bold text-slate-700">
                                     <CircleAlert className="h-4 w-4 text-blue-600" />
                                     Risk Level
                                 </div>
                                 <div className="mt-3 flex items-center justify-between gap-3">
-                                    <span className={`inline-flex rounded-full border px-3 py-1.5 text-xs font-bold uppercase ${riskLevel.className}`}>
+                                    <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold uppercase ${riskLevel.className}`}>
+                                        {riskLevel.icon}
                                         {riskLevel.label}
                                     </span>
                                 </div>
