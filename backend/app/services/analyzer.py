@@ -309,6 +309,11 @@ STEP 1 - Understand the scenario
 - Identify likely UI controls and any page transitions.
 
 STEP 2 - Choose the automation strategy
+- First classify the scenario as one of:
+  - UI interaction flow
+  - API validation flow
+  - Combined UI + API workflow
+- The implementation pattern MUST follow that classification instead of using a fixed template.
 - Prefer stable selectors in this exact order:
   1. getByRole
   2. getByLabel
@@ -316,6 +321,10 @@ STEP 2 - Choose the automation strategy
   4. getByTestId
 - Use CSS selectors only if no semantic selector is plausible.
 - Avoid deep CSS chains and fragile selectors.
+- For UI navigation flows, use waitForURL, URL assertions, or safe navigation handling when the action changes pages.
+- For API-heavy flows, validate request/response behavior with waitForResponse or API request assertions when appropriate.
+- For combined flows, use both UI assertions and API verification in the same test.
+- Do not use invalid ARIA roles such as "password". Password inputs should use getByLabel or another valid accessible selector.
 - Use Playwright auto-waiting and expect assertions instead of arbitrary waits.
 
 STEP 3 - Generate production-quality Playwright code
@@ -325,6 +334,7 @@ STEP 3 - Generate production-quality Playwright code
 - Add a small number of high-value comments for important actions.
 - Use safe navigation handling patterns such as Promise.all with click + waitForNavigation when needed.
 - Use meaningful assertions such as URL checks, visible content, and key UI state validation.
+- Keep the structure consistent with senior automation engineering practices so selectors and actions are easy to move into page objects later.
 
 STEP 4 - Stability rules
 - NEVER use waitForTimeout.
@@ -334,6 +344,21 @@ STEP 4 - Stability rules
 
 STEP 5 - Framework-friendly structure
 - Organize selectors and actions so the test can later be extracted into page objects with minimal changes.
+
+STEP 6 - Assertions and lifecycle handling
+- Every script must include meaningful assertions that confirm the scenario outcome.
+- If the scenario opens a browser page, rely on Playwright fixtures and leave the test cleanly scoped.
+- Use request fixtures only when the scenario is API-driven or mixed.
+- Keep setup limited to what the test truly needs and avoid leaking state across tests.
+
+STEP 7 - Readability and maintainability
+- Use readable variable names.
+- Keep indentation and formatting consistent.
+- Add only concise comments that explain intent, not obvious syntax.
+- The finished script must look like code written by an experienced Playwright engineer.
+
+Use this pre-analysis and follow it:
+{strategy_context}
 
 You are generating code for this exact test case:
 - Scenario: {scenario}
@@ -367,6 +392,11 @@ STEP 1 - Understand the scenario
 - Identify likely stable, accessible UI controls.
 
 STEP 2 - Choose the automation strategy
+- First classify the scenario as one of:
+  - UI interaction flow
+  - API validation flow
+  - Combined UI + API workflow
+- The implementation pattern MUST follow that classification instead of using a fixed template.
 - Prefer stable selectors in this exact order:
   1. findByRole / contains with accessible text
   2. findByLabelText
@@ -374,6 +404,9 @@ STEP 2 - Choose the automation strategy
   4. getByTestId / data-testid
 - Avoid deep CSS chains, dynamic classes, and brittle selectors.
 - Do not use invalid ARIA roles such as "password". Password fields should be targeted with label-based selectors.
+- For UI navigation flows, use cy.location, cy.url, or equivalent navigation assertions.
+- For API-heavy flows, use cy.request or cy.intercept with response validation.
+- For combined flows, use UI interactions plus aliased network verification with cy.intercept/cy.wait.
 - Use Cypress retry behavior and assertion chaining instead of fixed waits.
 
 STEP 3 - Generate production-quality Cypress code
@@ -382,12 +415,28 @@ STEP 3 - Generate production-quality Cypress code
 - Keep selectors and actions easy to extract into page objects later.
 - Add only concise, high-value comments.
 - Use meaningful assertions for URL, visible state, and key UI outcomes.
+- Keep the implementation aligned with production Cypress practices and avoid ad hoc patterns.
 
 STEP 4 - Stability rules
 - NEVER use cy.wait with arbitrary time values.
 - NEVER use fixed delays.
 - NEVER use fragile CSS chains.
 - NEVER include markdown fences or explanations in the code.
+
+STEP 5 - Assertions and lifecycle handling
+- Every script must include meaningful assertions that confirm the scenario outcome.
+- Use beforeEach only when it simplifies stable setup and avoids duplication.
+- Let Cypress manage browser lifecycle; do not add unnecessary cleanup noise.
+- Keep setup deterministic and avoid leaking state between tests.
+
+STEP 6 - Readability and maintainability
+- Use readable aliases and variable names.
+- Keep indentation and formatting consistent.
+- Add only concise comments that clarify intent.
+- The finished script must look like code written by an experienced Cypress engineer.
+
+Use this pre-analysis and follow it:
+{strategy_context}
 
 You are generating code for this exact test case:
 - Scenario: {scenario}
@@ -421,9 +470,17 @@ STEP 1 - Understand the scenario
 - Identify stable locators that could be reused in a Page Object Model later.
 
 STEP 2 - Choose the automation strategy
+- First classify the scenario as one of:
+  - UI interaction flow
+  - API validation flow
+  - Combined UI + API workflow
+- The implementation pattern MUST follow that classification instead of using a fixed template.
 - Prefer accessible, stable locators first. Use descriptive By locators that are realistic for production UI tests.
 - Avoid brittle XPath or deep CSS selectors unless there is no better option.
 - Do not use invalid ARIA roles such as "password". Password fields should be accessed via label-associated or stable attribute locators.
+- For UI navigation flows, use WebDriverWait with URL or visible-state assertions.
+- For API-heavy flows, use explicit Java-based API verification only when the scenario is primarily backend-driven.
+- For combined flows, use Selenium UI verification plus explicit backend verification where the scenario clearly requires it.
 - Use WebDriverWait and ExpectedConditions for synchronization.
 
 STEP 3 - Generate production-quality Selenium code
@@ -432,12 +489,27 @@ STEP 3 - Generate production-quality Selenium code
 - Use WebDriverWait instead of sleeps.
 - Include meaningful assertions that confirm the flow succeeded or failed correctly.
 - Keep the code ready for future extraction into page objects.
+- Include browser setup and teardown that cleanly closes resources.
 
 STEP 4 - Stability rules
 - NEVER use Thread.sleep.
 - NEVER use arbitrary waits.
 - NEVER use brittle locator chains.
 - NEVER include markdown fences or explanations in the code.
+
+STEP 5 - Assertions and lifecycle handling
+- Every script must include meaningful assertions that confirm the scenario outcome.
+- Initialize the driver clearly and always close it safely in teardown/finally.
+- Use WebDriverWait and ExpectedConditions for all non-trivial synchronization.
+- Keep helper-level structure clean so the method can be moved into a scalable framework later.
+
+STEP 6 - Readability and maintainability
+- Use readable variable names and consistent formatting.
+- Add only concise comments that clarify important intent.
+- The finished script must look like code written by an experienced Selenium automation engineer.
+
+Use this pre-analysis and follow it:
+{strategy_context}
 
 You are generating code for this exact test case:
 - Scenario: {scenario}
@@ -471,9 +543,14 @@ STEP 1 - Understand the scenario
 - Identify positive and negative validation opportunities when relevant.
 
 STEP 2 - Choose the automation strategy
+- First classify the scenario as one of:
+  - API validation flow
+  - Combined UI + API workflow with API-first verification
+- The implementation pattern MUST follow that classification instead of using a fixed template.
 - Prefer Playwright API testing with @playwright/test in TypeScript unless the scenario strongly suggests another API library.
 - Use native framework assertions and response parsing.
 - Validate status code, important response fields, and error handling behavior.
+- If the scenario mentions a UI-triggered API flow, focus on validating the backend contract and persisted side effects that can be asserted without a browser.
 - Avoid fixed waits or artificial delays.
 
 STEP 3 - Generate production-quality API automation code
@@ -481,10 +558,25 @@ STEP 3 - Generate production-quality API automation code
 - Structure the request payload, request execution, and assertions cleanly.
 - Add concise TODO comments only where endpoint details are not known.
 - Keep the code easy to refactor into reusable API client helpers later.
+- Keep the implementation aligned with production API automation practices.
 
 STEP 4 - Stability rules
 - NEVER use arbitrary delays.
 - NEVER include markdown fences or explanations in the code.
+
+STEP 5 - Assertions and lifecycle handling
+- Every script must validate status code, important response fields, and relevant error handling.
+- Keep setup minimal and scoped to the test.
+- Reuse the framework request client or fixture cleanly and avoid unnecessary boilerplate.
+
+STEP 6 - Readability and maintainability
+- Use readable request payload variables and assertion names.
+- Keep formatting consistent.
+- Add only concise comments that clarify intent.
+- The finished script must look like code written by an experienced API automation engineer.
+
+Use this pre-analysis and follow it:
+{strategy_context}
 
 You are generating code for this exact test case:
 - Scenario: {scenario}
@@ -663,12 +755,13 @@ async def generate_qa_intelligence(prd_text: str, test_cases: list[TestCaseSchem
 
 
 async def generate_automation_script(request: AutomationScriptRequest) -> AutomationScriptResponse:
-    prompt = _build_automation_script_prompt(request)
+    automation_ir = _build_automation_ir(request)
+    prompt = _build_automation_script_prompt(request, automation_ir)
 
     response = await client.chat_completion(
         model="Qwen/Qwen2.5-Coder-32B-Instruct",
         messages=[
-            {"role": "system", "content": "You generate practical test automation and always return valid JSON."},
+            {"role": "system", "content": "You generate production-grade test automation, apply framework best practices, and always return valid JSON."},
             {"role": "user", "content": prompt},
         ],
         max_tokens=4000,
@@ -685,8 +778,8 @@ async def generate_automation_script(request: AutomationScriptRequest) -> Automa
             framework=str(data.get("framework") or request.framework).strip(),
             language=str(data.get("language") or _default_language_for_framework(request.framework)).strip(),
             file_name=str(data.get("file_name") or _default_file_name(request.framework, request.scenario)).strip(),
-            code=generated_code or _fallback_automation_code(request),
-            explanation=str(data.get("explanation") or "Automation-ready script generated from the selected test case.").strip(),
+            code=generated_code or _fallback_automation_code(request, automation_ir),
+            explanation=str(data.get("explanation") or f"Automation-ready script generated from the internal Automation IR for a {automation_ir['test_type']} flow.").strip(),
         )
     except Exception as e:
         print(f"Failed to parse automation script: {e}")
@@ -695,7 +788,7 @@ async def generate_automation_script(request: AutomationScriptRequest) -> Automa
             framework=request.framework,
             language=_default_language_for_framework(request.framework),
             file_name=_default_file_name(request.framework, request.scenario),
-            code=_fallback_automation_code(request),
+            code=_fallback_automation_code(request, automation_ir),
             explanation="Fallback automation template generated because the AI response could not be parsed.",
         )
 
@@ -732,7 +825,7 @@ def _default_language_for_framework(framework: str) -> str:
     return "TypeScript"
 
 
-def _build_automation_script_prompt(request: AutomationScriptRequest) -> str:
+def _build_automation_script_prompt(request: AutomationScriptRequest, automation_ir: dict[str, object]) -> str:
     normalized_framework = request.framework.strip().lower()
     if normalized_framework == "playwright":
         template = PLAYWRIGHT_AUTOMATION_SCRIPT_PROMPT
@@ -743,9 +836,12 @@ def _build_automation_script_prompt(request: AutomationScriptRequest) -> str:
     else:
         template = API_AUTOMATION_SCRIPT_PROMPT
 
+    strategy_context = _format_automation_ir_context(automation_ir)
+
     return (
         template
         .replace("{framework}", request.framework)
+        .replace("{strategy_context}", strategy_context)
         .replace("{scenario}", request.scenario)
         .replace("{testing_type}", request.testing_type)
         .replace("{feature_name}", request.feature_name)
@@ -785,11 +881,327 @@ def _clean_generated_code(code: str) -> str:
     return cleaned.strip()
 
 
-def _fallback_automation_code(request: AutomationScriptRequest) -> str:
+def _build_automation_strategy_context(request: AutomationScriptRequest) -> str:
+    return _format_automation_ir_context(_build_automation_ir(request))
+
+
+def _format_automation_ir_context(automation_ir: dict[str, object]) -> str:
+    ordered_steps = automation_ir.get("ordered_test_steps") or []
+    formatted_steps = "\n".join(
+        f"  {index}. {step}"
+        for index, step in enumerate(ordered_steps, start=1)
+    ) or "  1. Validate the intended outcome using the scenario details."
+
+    selector_targets = automation_ir.get("selector_targets") or []
+    formatted_selectors = "\n".join(
+        f"  - {selector_target['element']}: {selector_target['selector_strategy']}"
+        for selector_target in selector_targets
+        if isinstance(selector_target, dict)
+    ) or "  - Use accessible selectors first, then test IDs, then stable attributes."
+
+    assertions = automation_ir.get("assertions") or []
+    formatted_assertions = "\n".join(
+        f"  - {assertion}"
+        for assertion in assertions
+        if str(assertion).strip()
+    ) or "  - Validate the intended scenario outcome."
+
+    framework_mapping = automation_ir.get("framework_mapping") or {}
+
+    return (
+        "Internal Automation IR:\n"
+        f"- Test type: {automation_ir['test_type']}\n"
+        f"- Primary validation objective: {automation_ir['primary_validation_objective']}\n"
+        "- Ordered test steps:\n"
+        f"{formatted_steps}\n"
+        "- Selector targets:\n"
+        f"{formatted_selectors}\n"
+        f"- Synchronization strategy: {automation_ir['synchronization_strategy']}\n"
+        f"- Assertion strategy: {automation_ir['assertion_strategy']}\n"
+        "- Assertions:\n"
+        f"{formatted_assertions}\n"
+        f"- Classification reasoning: {automation_ir['reasoning']}\n"
+        "- Framework mapping:\n"
+        f"  - Playwright: {framework_mapping.get('playwright', '')}\n"
+        f"  - Cypress: {framework_mapping.get('cypress', '')}\n"
+        f"  - Selenium: {framework_mapping.get('selenium', '')}\n"
+        f"  - API: {framework_mapping.get('api', '')}"
+    )
+
+
+def _infer_automation_strategy(request: AutomationScriptRequest) -> dict[str, str]:
+    combined_text = " ".join(
+        part.strip()
+        for part in [
+            request.scenario,
+            request.testing_type,
+            request.feature_name,
+            request.sub_feature_name,
+            request.test_data,
+            request.acceptance_criteria,
+            request.test_steps,
+        ]
+        if part and part.strip()
+    ).lower()
+
+    ui_keywords = [
+        "page", "screen", "button", "click", "select", "choose", "fill", "enter", "type", "upload",
+        "modal", "form", "dashboard", "login", "logout", "redirect", "navigate", "tab", "dialog",
+        "toast", "visible", "displayed", "shown", "landing",
+    ]
+    navigation_keywords = [
+        "redirect", "navigate", "route", "url", "page loads", "moves to", "taken to", "redirected",
+        "dashboard", "landing page", "open page",
+    ]
+    api_keywords = [
+        "api", "endpoint", "request", "response", "payload", "json", "status code", "http", "graphql",
+        "rest", "header", "token", "body", "schema", "service", "backend", "network", "retry",
+        "webhook", "latency", "timeout", "error code",
+    ]
+    api_side_effect_keywords = [
+        "saved", "persisted", "stored", "created", "updated", "deleted", "sent", "triggered",
+        "sync", "synchronized", "notification sent", "email sent",
+    ]
+
+    ui_score = sum(1 for keyword in ui_keywords if keyword in combined_text)
+    navigation_score = sum(1 for keyword in navigation_keywords if keyword in combined_text)
+    api_score = sum(1 for keyword in api_keywords if keyword in combined_text)
+    side_effect_score = sum(1 for keyword in api_side_effect_keywords if keyword in combined_text)
+
     framework = request.framework.strip().lower()
-    scenario_comment = f"Scenario: {request.scenario}"
+
+    if framework == "api":
+        classification = "API validation flow" if api_score >= ui_score else "Combined UI + API workflow with API-first verification"
+    elif api_score and (ui_score or side_effect_score):
+        classification = "Combined UI + API workflow"
+    elif api_score > ui_score:
+        classification = "API validation flow"
+    else:
+        classification = "UI interaction flow"
+
+    if classification == "UI interaction flow":
+        synchronization = (
+            "Wait on navigation or URL changes only when the action actually changes pages; otherwise rely on element auto-waiting."
+            if navigation_score
+            else "Rely on framework-native element waits and stable visibility/state assertions."
+        )
+        validation = (
+            "Validate the resulting page URL, visible content, and user-facing success or error state."
+        )
+    elif classification == "API validation flow":
+        synchronization = (
+            "Synchronize on the API request or response path instead of page navigation, then validate the payload and response contract."
+        )
+        validation = (
+            "Assert response status, key response fields, and negative/error handling where relevant."
+        )
+    else:
+        synchronization = (
+            "Combine UI synchronization with explicit API verification so the script validates both the user flow and the underlying network/backend behavior."
+        )
+        validation = (
+            "Assert both the visible UI result and the related API response or persisted side effect."
+        )
 
     if framework == "playwright":
+        framework_note = (
+            "Use waitForURL/toHaveURL for navigation flows, waitForResponse or request context for API-heavy flows, and combine both for mixed scenarios."
+        )
+    elif framework == "cypress":
+        framework_note = (
+            "Use cy.location/cy.url for navigation flows, cy.request or cy.intercept for API-heavy flows, and alias intercepted requests for mixed scenarios."
+        )
+    elif framework == "selenium":
+        framework_note = (
+            "Use WebDriverWait and ExpectedConditions for UI synchronization, and only add Java API verification when the scenario clearly requires backend validation."
+        )
+    else:
+        framework_note = (
+            "Use API-first assertions with request/response validation; for mixed scenarios focus on backend contract checks and verifiable side effects."
+        )
+
+    return {
+        "classification": classification,
+        "reasoning": (
+            f"Detected UI cues={ui_score}, navigation cues={navigation_score}, API cues={api_score}, side-effect cues={side_effect_score} from the scenario details."
+        ),
+        "synchronization": synchronization,
+        "validation": validation,
+        "framework_note": framework_note,
+    }
+
+
+def _extract_ordered_test_steps(request: AutomationScriptRequest) -> list[str]:
+    raw_steps = [
+        line.strip().lstrip("-*0123456789. ").strip()
+        for line in request.test_steps.replace("\r", "\n").split("\n")
+        if line.strip()
+    ]
+    if raw_steps:
+        return raw_steps
+
+    fallback_steps = [
+        request.scenario.strip(),
+        request.acceptance_criteria.strip(),
+    ]
+    return [step for step in fallback_steps if step]
+
+
+def _infer_selector_targets(request: AutomationScriptRequest, classification: str) -> list[dict[str, str]]:
+    combined_text = " ".join(
+        part.strip()
+        for part in [request.scenario, request.acceptance_criteria, request.test_steps]
+        if part and part.strip()
+    ).lower()
+
+    selector_targets: list[dict[str, str]] = []
+
+    if "login" in combined_text:
+        selector_targets.extend([
+            {"element": "Username input", "selector_strategy": "Prefer getByLabel('Username') or equivalent accessible label selector."},
+            {"element": "Password input", "selector_strategy": "Prefer getByLabel('Password'); do not use an invalid password role."},
+            {"element": "Login submit action", "selector_strategy": "Prefer getByRole('button', { name: /login/i }) or equivalent accessible button selector."},
+        ])
+
+    if any(keyword in combined_text for keyword in ["upload", "file", "document"]):
+        selector_targets.append(
+            {"element": "Upload control", "selector_strategy": "Prefer accessible label or button selectors, then stable test IDs for file inputs if needed."}
+        )
+
+    if any(keyword in combined_text for keyword in ["dashboard", "heading", "page", "screen", "modal", "dialog"]):
+        selector_targets.append(
+            {"element": "Primary page confirmation element", "selector_strategy": "Prefer heading, dialog, or landmark role selectors before test IDs or stable attributes."}
+        )
+
+    if "API" in classification or "Hybrid" in classification:
+        selector_targets.append(
+            {"element": "Network interaction", "selector_strategy": "Validate request/response contracts and side effects instead of relying only on UI selectors."}
+        )
+
+    if not selector_targets:
+        selector_targets.append(
+            {"element": "Primary interactive control", "selector_strategy": "Prefer role, label, or placeholder selectors first; fall back to test IDs or stable attributes only when necessary."}
+        )
+
+    return selector_targets
+
+
+def _build_assertions(classification: str, request: AutomationScriptRequest) -> list[str]:
+    assertions: list[str] = []
+    combined_text = " ".join(
+        part.strip()
+        for part in [request.scenario, request.acceptance_criteria, request.test_steps]
+        if part and part.strip()
+    ).lower()
+
+    if classification == "UI":
+        if any(keyword in combined_text for keyword in ["redirect", "navigate", "url", "dashboard", "page"]):
+            assertions.append("Verify the resulting URL or route matches the expected destination.")
+        assertions.append("Verify the key UI element, heading, success state, or error state is visible.")
+    elif classification == "API":
+        assertions.extend([
+            "Verify the response status code matches the expected outcome.",
+            "Verify the response body contains the required fields or error details.",
+        ])
+    else:
+        assertions.extend([
+            "Verify the triggered API response succeeds or fails as expected.",
+            "Verify the final UI state reflects the backend result.",
+        ])
+
+    return assertions
+
+
+def _build_automation_ir(request: AutomationScriptRequest) -> dict[str, object]:
+    strategy = _infer_automation_strategy(request)
+    classification = strategy["classification"]
+    ordered_steps = _extract_ordered_test_steps(request)
+
+    if classification == "UI interaction flow":
+        test_type = "UI"
+    elif classification == "API validation flow":
+        test_type = "API"
+    else:
+        test_type = "Hybrid"
+
+    framework_mapping = {
+        "playwright": "Use Playwright auto-waiting, getByRole/getByLabel selectors, and URL or response validation based on the selected strategy.",
+        "cypress": "Use Cypress command chaining, accessible selectors, and URL or intercept/request assertions based on the selected strategy.",
+        "selenium": "Use explicit waits with WebDriverWait and ExpectedConditions, stable locators, and deterministic teardown.",
+        "api": "Use request/response assertions, response body validation, and API-client fixtures or helpers without browser dependency.",
+    }
+
+    return {
+        "ir_name": "Automation IR",
+        "test_type": test_type,
+        "classification": classification,
+        "primary_validation_objective": strategy["validation"],
+        "ordered_test_steps": ordered_steps,
+        "selector_targets": _infer_selector_targets(request, test_type),
+        "synchronization_strategy": strategy["synchronization"],
+        "assertion_strategy": strategy["validation"],
+        "assertions": _build_assertions(test_type, request),
+        "reasoning": strategy["reasoning"],
+        "framework_mapping": framework_mapping,
+    }
+
+
+def _fallback_automation_code(request: AutomationScriptRequest, automation_ir: dict[str, object] | None = None) -> str:
+    framework = request.framework.strip().lower()
+    scenario_comment = f"Scenario: {request.scenario}"
+    strategy = automation_ir or _build_automation_ir(request)
+    classification = str(strategy["classification"])
+
+    if framework == "playwright":
+        if classification == "API validation flow":
+            return f"""import {{ test, expect }} from '@playwright/test';
+
+test('{request.scenario}', async ({{ request }}) => {{
+  // {scenario_comment}
+  const response = await request.post('/api/resource', {{
+    data: {{
+      // TODO: Replace with the real API payload for this scenario.
+      notes: `{request.test_data or 'Provide request data for this API flow.'}`,
+    }},
+  }});
+
+  expect(response.ok()).toBeTruthy();
+  expect(response.status()).toBeGreaterThanOrEqual(200);
+
+  const responseBody = await response.json();
+
+  // TODO: Replace placeholder assertions with real response-field validation.
+  expect(responseBody).toBeTruthy();
+}});
+""".rstrip()
+
+        if classification == "Combined UI + API workflow":
+            return f"""import {{ test, expect }} from '@playwright/test';
+
+test('{request.scenario}', async ({{ page }}) => {{
+  // {scenario_comment}
+  await page.goto('/');
+
+  const pageHeading = page.getByRole('heading').first();
+  await expect(pageHeading).toBeVisible();
+
+  const relevantResponse = page.waitForResponse((response) =>
+    response.ok() && response.url().includes('/api/')
+  );
+
+  // TODO: Replace placeholder selectors with the real accessible controls from the product.
+  // TODO: Perform the scenario steps that trigger the backend interaction.
+  // {request.test_steps}
+
+  const response = await relevantResponse;
+  expect(response.ok()).toBeTruthy();
+  await expect(page).toHaveURL(/.+/);
+
+  // Validate the visible UI outcome after the backend call completes.
+  await expect(pageHeading).toBeVisible();
+}});
+""".rstrip()
+
         return f"""import {{ test, expect }} from '@playwright/test';
 
 test('{request.scenario}', async ({{ page }}) => {{
@@ -809,6 +1221,45 @@ test('{request.scenario}', async ({{ page }}) => {{
 """.rstrip()
 
     if framework == "cypress":
+        if classification == "API validation flow":
+            return f"""describe('{request.feature_name or 'Generated flow'}', () => {{
+  it('{request.scenario}', () => {{
+    // {scenario_comment}
+    cy.request({{
+      method: 'POST',
+      url: '/api/resource',
+      body: {{
+        // TODO: Replace with the real request body for this API scenario.
+        notes: `{request.test_data or 'Provide request data for this API flow.'}`,
+      }},
+    }}).then((response) => {{
+      expect(response.status).to.be.oneOf([200, 201]);
+      expect(response.body).to.exist;
+    }});
+  }});
+}});
+""".rstrip()
+
+        if classification == "Combined UI + API workflow":
+            return f"""describe('{request.feature_name or 'Generated flow'}', () => {{
+  it('{request.scenario}', () => {{
+    // {scenario_comment}
+    cy.intercept('**/api/**').as('apiRequest');
+    cy.visit('/');
+
+    // TODO: Perform the scenario steps using stable accessible selectors.
+    // {request.test_steps}
+
+    cy.wait('@apiRequest').then((interception) => {{
+      expect(interception.response?.statusCode).to.be.oneOf([200, 201]);
+    }});
+
+    cy.contains('body', /./).should('be.visible');
+    cy.location('pathname').should('match', /.+/);
+  }});
+}});
+""".rstrip()
+
         return f"""describe('{request.feature_name or 'Generated flow'}', () => {{
   it('{request.scenario}', () => {{
     // {scenario_comment}
@@ -826,6 +1277,36 @@ test('{request.scenario}', async ({{ page }}) => {{
     if framework == "selenium":
         class_name = _default_file_name(request.framework, request.scenario).replace(".java", "")
         method_name = class_name[:1].lower() + class_name[1:]
+        if classification == "API validation flow":
+            return f"""import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import org.junit.jupiter.api.Test;
+
+public class {class_name} {{
+
+    @Test
+    void {method_name}() throws Exception {{
+        // {scenario_comment}
+        HttpClient client = HttpClient.newHttpClient();
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://localhost:8000/api/resource"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("{{}}"))
+            .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertTrue(response.statusCode() >= 200 && response.statusCode() < 300);
+        assertEquals(false, response.body().isBlank());
+    }}
+}}
+""".rstrip()
+
         return f"""import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -855,11 +1336,35 @@ public class {class_name} {{
 
             // TODO: Execute the scenario steps with stable locators.
             // {request.test_steps}
+
+            // Validate the user-visible outcome after the flow completes.
+            assertTrue(pageHeading.isDisplayed());
         }} finally {{
             driver.quit();
         }}
     }}
 }}
+""".rstrip()
+
+    if classification == "Combined UI + API workflow with API-first verification":
+        return f"""import {{ test, expect }} from '@playwright/test';
+
+test('{request.scenario}', async ({{ request }}) => {{
+  // {scenario_comment}
+  const response = await request.post('/api/resource', {{
+    data: {{
+      // TODO: Replace with the real request payload that the UI flow would trigger.
+      notes: `{request.test_data or 'Provide request data for this combined API flow.'}`,
+    }},
+  }});
+
+  expect(response.ok()).toBeTruthy();
+
+  const responseBody = await response.json();
+
+  // TODO: Validate the side effect or persisted state that corresponds to the UI flow.
+  expect(responseBody).toBeTruthy();
+}});
 """.rstrip()
 
     return f"""import {{ test, expect }} from '@playwright/test';

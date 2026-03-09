@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
@@ -118,6 +118,7 @@ interface QAIntelligence {
 interface QAIntelligenceResponse {
     prd_id: string;
     intelligence: QAIntelligence;
+    cached: boolean;
 }
 
 interface AutomationScriptResponse {
@@ -141,6 +142,30 @@ const CODE_GLOBALS = new Set([
 
 function normalizeLabel(value?: string) {
     return value?.trim().toLowerCase() || '';
+}
+
+function createQaIntelligenceSignature(standardizedPrd?: string, testCases: TestCase[] = []) {
+    if (!standardizedPrd || !testCases.length) return '';
+
+    const serialized = `${standardizedPrd}::${JSON.stringify(
+        testCases.map((testCase) => [
+            testCase.scenario,
+            testCase.testing_type,
+            testCase.severity,
+            testCase.priority,
+            testCase.feature_name,
+            testCase.sub_feature_name,
+            testCase.acceptance_criteria,
+            testCase.test_steps,
+        ]),
+    )}`;
+
+    let hash = 0;
+    for (let index = 0; index < serialized.length; index += 1) {
+        hash = (hash * 31 + serialized.charCodeAt(index)) | 0;
+    }
+
+    return `${serialized.length}-${Math.abs(hash)}`;
 }
 
 function getSeverityPresentation(severity: string) {
@@ -469,7 +494,9 @@ export default function PRDViewer() {
     const [priorityFilter, setPriorityFilter] = useState('all');
     const [featureFilter, setFeatureFilter] = useState('all');
     const [qaIntelligence, setQaIntelligence] = useState<QAIntelligence | null>(null);
+    const [qaIntelligenceCached, setQaIntelligenceCached] = useState(false);
     const [isLoadingQAIntelligence, setIsLoadingQAIntelligence] = useState(false);
+    const [isRefreshingQAIntelligence, setIsRefreshingQAIntelligence] = useState(false);
     const [qaIntelligenceError, setQaIntelligenceError] = useState<string | null>(null);
     const [selectedFramework, setSelectedFramework] = useState('Playwright');
     const [selectedScenarioIndex, setSelectedScenarioIndex] = useState(0);
@@ -490,6 +517,8 @@ export default function PRDViewer() {
     const [mindMapSelection, setMindMapSelection] = useState<MindMapSelection | null>(null);
     const prdContentRef = useRef<HTMLDivElement>(null);
     const automationPanelRef = useRef<HTMLDivElement>(null);
+    const previousQaCacheKeyRef = useRef<string | null>(null);
+    const qaIntelligenceFetchAttemptedRef = useRef<string | null>(null);
 
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
@@ -547,28 +576,95 @@ export default function PRDViewer() {
         }
     }, [selectedScenarioIndex, testCases]);
 
+    const qaIntelligenceSignature = useMemo(
+        () => createQaIntelligenceSignature(data?.analysis?.standardized_prd, testCases),
+        [data?.analysis?.standardized_prd, testCases],
+    );
+    const qaIntelligenceCacheKey = useMemo(
+        () => (id && qaIntelligenceSignature ? `qa-intelligence:${id}:${qaIntelligenceSignature}` : null),
+        [id, qaIntelligenceSignature],
+    );
+
     useEffect(() => {
-        const fetchQAIntelligence = async () => {
-            if (!id || activeTab !== 'qa' || !testCases.length || qaIntelligence || isLoadingQAIntelligence) {
-                return;
-            }
+        if (previousQaCacheKeyRef.current === qaIntelligenceCacheKey) {
+            return;
+        }
 
+        previousQaCacheKeyRef.current = qaIntelligenceCacheKey;
+        qaIntelligenceFetchAttemptedRef.current = null;
+        setQaIntelligence(null);
+        setQaIntelligenceCached(false);
+        setQaIntelligenceError(null);
+    }, [qaIntelligenceCacheKey]);
+
+    const fetchQAIntelligence = useCallback(async (forceRegenerate = false) => {
+        if (!id || !testCases.length) return;
+
+        if (!forceRegenerate && qaIntelligenceFetchAttemptedRef.current === qaIntelligenceCacheKey) {
+            return;
+        }
+
+        qaIntelligenceFetchAttemptedRef.current = qaIntelligenceCacheKey;
+
+        if (forceRegenerate) {
+            setIsRefreshingQAIntelligence(true);
+        } else if (!qaIntelligence) {
             setIsLoadingQAIntelligence(true);
-            setQaIntelligenceError(null);
+        }
 
-            try {
-                const response = await axios.get<QAIntelligenceResponse>(`http://localhost:8000/api/v1/prds/${id}/qa-intelligence`);
-                setQaIntelligence(response.data.intelligence);
-            } catch (err: any) {
-                console.error('Error fetching QA intelligence:', err);
-                setQaIntelligenceError(err.response?.data?.detail || 'Failed to load QA intelligence.');
-            } finally {
-                setIsLoadingQAIntelligence(false);
+        setQaIntelligenceError(null);
+
+        try {
+            const response = await axios.get<QAIntelligenceResponse>(
+                `http://localhost:8000/api/v1/prds/${id}/qa-intelligence`,
+                {
+                    params: forceRegenerate ? { regenerate: true } : undefined,
+                },
+            );
+
+            setQaIntelligence(response.data.intelligence);
+            setQaIntelligenceCached(response.data.cached);
+
+            if (qaIntelligenceCacheKey) {
+                sessionStorage.setItem(
+                    qaIntelligenceCacheKey,
+                    JSON.stringify({
+                        intelligence: response.data.intelligence,
+                        cached: response.data.cached,
+                    }),
+                );
             }
-        };
+        } catch (err: any) {
+            console.error('Error fetching QA intelligence:', err);
+            setQaIntelligenceError(err.response?.data?.detail || 'Failed to load QA intelligence.');
+        } finally {
+            setIsLoadingQAIntelligence(false);
+            setIsRefreshingQAIntelligence(false);
+        }
+    }, [id, qaIntelligence, qaIntelligenceCacheKey, testCases.length]);
+
+    useEffect(() => {
+        if (!id || activeTab !== 'qa' || !testCases.length || qaIntelligence || isLoadingQAIntelligence) {
+            return;
+        }
+
+        if (qaIntelligenceCacheKey) {
+            const cachedPayload = sessionStorage.getItem(qaIntelligenceCacheKey);
+            if (cachedPayload) {
+                try {
+                    const parsedCache = JSON.parse(cachedPayload) as Pick<QAIntelligenceResponse, 'intelligence' | 'cached'>;
+                    setQaIntelligence(parsedCache.intelligence);
+                    setQaIntelligenceCached(true);
+                    return;
+                } catch (cacheError) {
+                    console.error('Failed to parse cached QA intelligence:', cacheError);
+                    sessionStorage.removeItem(qaIntelligenceCacheKey);
+                }
+            }
+        }
 
         void fetchQAIntelligence();
-    }, [activeTab, id, isLoadingQAIntelligence, qaIntelligence, testCases.length]);
+    }, [activeTab, fetchQAIntelligence, id, isLoadingQAIntelligence, qaIntelligence, qaIntelligenceCacheKey, testCases.length]);
 
     useEffect(() => {
         if (!copiedAutomation) return;
@@ -812,6 +908,8 @@ export default function PRDViewer() {
                 // Refetch the full PRD detail to get updated data
                 const detailResponse = await axios.get(`http://localhost:8000/api/v1/prds/${id}`);
                 setData(detailResponse.data);
+                setQaIntelligence(null);
+                setQaIntelligenceCached(false);
             }
         } catch (err: any) {
             console.error('Error in AI chat:', err);
@@ -827,6 +925,7 @@ export default function PRDViewer() {
         setIsGeneratingTestCases(true);
         setActiveTab('testcases');
         setQaIntelligence(null);
+        setQaIntelligenceCached(false);
         setQaIntelligenceError(null);
         setAutomationScript(null);
         setAutomationError(null);
@@ -843,6 +942,18 @@ export default function PRDViewer() {
         } finally {
             setIsGeneratingTestCases(false);
         }
+    };
+
+    const handleRegenerateQAIntelligence = async () => {
+        if (!qaIntelligenceCacheKey) {
+            qaIntelligenceFetchAttemptedRef.current = null;
+            await fetchQAIntelligence(true);
+            return;
+        }
+
+        sessionStorage.removeItem(qaIntelligenceCacheKey);
+        qaIntelligenceFetchAttemptedRef.current = null;
+        await fetchQAIntelligence(true);
     };
 
     const handleGenerateAutomation = async () => {
@@ -1416,11 +1527,28 @@ export default function PRDViewer() {
                                                 AI-powered coverage analysis, bug-risk detection, automation readiness, and test mapping.
                                             </p>
                                         </div>
-                                        {qaIntelligence && (
-                                            <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold text-violet-700">
-                                                Coverage {qaIntelligence.overall_coverage_percentage}%
-                                            </div>
-                                        )}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {qaIntelligenceCached && (
+                                                <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                                                    <CheckCircle2 className="h-4 w-4" />
+                                                    Loaded from cached analysis
+                                                </div>
+                                            )}
+                                            {qaIntelligence && (
+                                                <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-white px-4 py-2 text-sm font-semibold text-violet-700">
+                                                    Coverage {qaIntelligence.overall_coverage_percentage}%
+                                                </div>
+                                            )}
+                                            <button
+                                                type="button"
+                                                onClick={() => void handleRegenerateQAIntelligence()}
+                                                disabled={isRefreshingQAIntelligence || isLoadingQAIntelligence || !testCases.length}
+                                                className="inline-flex items-center gap-2 rounded-xl border border-violet-200 bg-white px-4 py-2 text-sm font-semibold text-violet-700 transition hover:border-violet-300 hover:bg-violet-100 disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                <RefreshCw className={`h-4 w-4 ${isRefreshingQAIntelligence ? 'animate-spin' : ''}`} />
+                                                {isRefreshingQAIntelligence ? 'Regenerating...' : 'Regenerate Analysis'}
+                                            </button>
+                                        </div>
                                     </div>
 
                                     {isLoadingQAIntelligence ? (
