@@ -84,6 +84,7 @@ class QAIntelligenceSchema(BaseModel):
 class QAIntelligenceResponse(BaseModel):
     prd_id: str
     intelligence: QAIntelligenceSchema
+    cached: bool = False
 
 
 class AutomationScriptRequest(BaseModel):

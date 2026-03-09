@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, BackgroundTasks, status
 from typing import List
+import hashlib
+import json
 import uuid
 
 from app.core.database import supabase
@@ -12,6 +14,7 @@ from app.models.schemas import (
     RefinementRequest, 
     ChatRequest, 
     ChatResponse,
+    QAIntelligenceSchema,
     QAIntelligenceResponse,
     TestCaseSchema,
     TestCaseListResponse
@@ -40,6 +43,90 @@ def _count_markdown_bullets(markdown_text: str) -> int:
         for line in markdown_text.splitlines()
         if line.lstrip().startswith("* ") or line.lstrip().startswith("- ")
     )
+
+
+def _compute_content_hash(value: object) -> str:
+    serialized = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(serialized.encode("utf-8")).hexdigest()
+
+
+def _compute_test_cases_hash(test_cases: list[TestCaseSchema]) -> str:
+    normalized_test_cases = [
+        (test_case.model_dump() if hasattr(test_case, "model_dump") else test_case.dict())
+        for test_case in test_cases
+    ]
+    return _compute_content_hash(normalized_test_cases)
+
+
+def _is_missing_qa_cache_table_error(error: Exception) -> bool:
+    message = str(error).lower()
+    return (
+        "qa_intelligence_cache" in message
+        and (
+            "does not exist" in message
+            or "could not find the table" in message
+            or "schema cache" in message
+            or "relation" in message
+        )
+    )
+
+
+def _invalidate_qa_intelligence_cache(prd_id: str) -> None:
+    try:
+        supabase.table("qa_intelligence_cache").delete().eq("prd_id", prd_id).execute()
+    except Exception as cache_err:
+        if _is_missing_qa_cache_table_error(cache_err):
+            print("QA intelligence cache table does not exist yet; skipping invalidation.")
+            return
+        print(f"Failed to invalidate QA intelligence cache for {prd_id}: {cache_err}")
+
+
+def _load_cached_qa_intelligence(prd_id: str, prd_hash: str, test_cases_hash: str) -> QAIntelligenceResponse | None:
+    try:
+        cache_res = supabase.table("qa_intelligence_cache").select("*").eq("prd_id", prd_id).execute()
+    except Exception as cache_err:
+        if _is_missing_qa_cache_table_error(cache_err):
+            print("QA intelligence cache table does not exist yet; skipping cache read.")
+            return None
+        raise
+
+    if not cache_res.data:
+        return None
+
+    cache_record = cache_res.data[0]
+    if cache_record.get("prd_hash") != prd_hash or cache_record.get("test_cases_hash") != test_cases_hash:
+        return None
+
+    intelligence_payload = cache_record.get("intelligence")
+    if not isinstance(intelligence_payload, dict):
+        return None
+
+    try:
+        return QAIntelligenceResponse(
+            prd_id=prd_id,
+            intelligence=QAIntelligenceSchema(**intelligence_payload),
+            cached=True,
+        )
+    except Exception as parse_err:
+        print(f"Cached QA intelligence is invalid for {prd_id}: {parse_err}")
+        return None
+
+
+def _store_qa_intelligence_cache(prd_id: str, prd_hash: str, test_cases_hash: str, intelligence: QAIntelligenceSchema) -> None:
+    try:
+        intelligence_payload = intelligence.model_dump() if hasattr(intelligence, "model_dump") else intelligence.dict()
+        supabase.table("qa_intelligence_cache").delete().eq("prd_id", prd_id).execute()
+        supabase.table("qa_intelligence_cache").insert({
+            "prd_id": prd_id,
+            "prd_hash": prd_hash,
+            "test_cases_hash": test_cases_hash,
+            "intelligence": intelligence_payload,
+        }).execute()
+    except Exception as cache_err:
+        if _is_missing_qa_cache_table_error(cache_err):
+            print("QA intelligence cache table does not exist yet; skipping cache write.")
+            return
+        print(f"Failed to store QA intelligence cache for {prd_id}: {cache_err}")
 
 async def process_document(prd_id: str, file_bytes: bytes, filename: str):
     try:
@@ -240,6 +327,7 @@ async def refine_prd(prd_id: str, request: RefinementRequest):
             "missing_requirements": getattr(new_analysis, 'missing_requirements', []),
             "qa_risk_insights": getattr(new_analysis, 'qa_risk_insights', [])
         }).eq("prd_id", prd_id).execute()
+        _invalidate_qa_intelligence_cache(prd_id)
         
         # 4. Return updated PRD detail
         return await get_prd_detail(prd_id)
@@ -317,6 +405,7 @@ async def chat_prd(prd_id: str, request: ChatRequest):
                 "missing_requirements": new_analysis.missing_requirements,
                 "qa_risk_insights": new_analysis.qa_risk_insights,
             }).eq("prd_id", prd_id).execute()
+            _invalidate_qa_intelligence_cache(prd_id)
 
             response_analysis = new_analysis
 
@@ -361,6 +450,7 @@ async def create_test_cases(prd_id: str):
                 insert_data.append(tc_dict)
                 
             supabase.table("test_cases").insert(insert_data).execute()
+            _invalidate_qa_intelligence_cache(prd_id)
         except Exception as db_err:
             print(f"Database error while saving test cases: {db_err}")
             if "relation \"public.test_cases\" does not exist" in str(db_err):
@@ -387,22 +477,32 @@ async def get_test_cases(prd_id: str):
 
 
 @router.get("/prds/{prd_id}/qa-intelligence", response_model=QAIntelligenceResponse)
-async def get_qa_intelligence(prd_id: str):
+async def get_qa_intelligence(prd_id: str, regenerate: bool = False):
     try:
         analysis_res = supabase.table("analysis_results").select("standardized_prd").eq("prd_id", prd_id).execute()
         if not analysis_res.data:
             raise HTTPException(status_code=400, detail="PRD has no analysis to evaluate")
 
+        standardized_prd = analysis_res.data[0]["standardized_prd"]
         test_case_res = supabase.table("test_cases").select("*").eq("prd_id", prd_id).execute()
         test_cases = [TestCaseSchema(**item) for item in test_case_res.data]
         if not test_cases:
             raise HTTPException(status_code=400, detail="Generate test cases before requesting QA intelligence")
 
+        prd_hash = _compute_content_hash(standardized_prd)
+        test_cases_hash = _compute_test_cases_hash(test_cases)
+
+        if not regenerate:
+            cached_response = _load_cached_qa_intelligence(prd_id, prd_hash, test_cases_hash)
+            if cached_response:
+                return cached_response
+
         intelligence = await generate_qa_intelligence(
-            analysis_res.data[0]["standardized_prd"],
+            standardized_prd,
             test_cases,
         )
-        return QAIntelligenceResponse(prd_id=prd_id, intelligence=intelligence)
+        _store_qa_intelligence_cache(prd_id, prd_hash, test_cases_hash, intelligence)
+        return QAIntelligenceResponse(prd_id=prd_id, intelligence=intelligence, cached=False)
     except HTTPException:
         raise
     except Exception as e:

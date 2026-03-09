@@ -86,3 +86,28 @@ CREATE POLICY "Users can view their own test cases" ON public.test_cases
       AND prds.user_id = auth.uid()
     )
   );
+
+
+-- 4. Create 'qa_intelligence_cache' table
+CREATE TABLE public.qa_intelligence_cache (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  prd_id uuid REFERENCES public.prds(id) ON DELETE CASCADE NOT NULL UNIQUE,
+  prd_hash text NOT NULL,
+  test_cases_hash text NOT NULL,
+  intelligence jsonb NOT NULL,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.qa_intelligence_cache ENABLE ROW LEVEL SECURITY;
+
+-- Allow users to see their own cached QA intelligence through the PRDs table
+CREATE POLICY "Users can view their own QA intelligence cache" ON public.qa_intelligence_cache
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.prds
+      WHERE prds.id = qa_intelligence_cache.prd_id
+      AND prds.user_id = auth.uid()
+    )
+  );

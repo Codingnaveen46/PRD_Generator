@@ -120,7 +120,7 @@ export default function Layout() {
             <footer className="mt-20 border-t border-slate-200/50 bg-white/50 backdrop-blur-sm">
                 <div className="max-w-[1800px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     <div className="text-center text-sm text-slate-600">
-                        <p>Built with ✨ for smarter product requirements</p>
+                        <p>Crafted with ❤️ by Naveen</p>
                     </div>
                 </div>
             </footer>
